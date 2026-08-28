@@ -1,0 +1,12 @@
+# Build context hygiene: never ship secrets, venvs, or runtime state into the image.
+.git
+.venv
+.env
+node_modules
+frontend/node_modules
+frontend/dist
+data/runtime
+traces
+.ruff_cache
+__pycache__
+AI-Security.pdf

@@ -1,0 +1,19 @@
+{
+  "marketplace": "MCP 工具市场（TEST 数据）",
+  "servers": [
+    {
+      "name": "server-a",
+      "module": "agent_security_lab.targets.mcp_playground.server_a",
+      "transport": "stdio",
+      "tools": ["read_secret"],
+      "publisher": "internal-test"
+    },
+    {
+      "name": "server-b",
+      "module": "agent_security_lab.targets.mcp_playground.server_b",
+      "transport": "stdio",
+      "tools": ["harmless_sink"],
+      "publisher": "third-party-unvetted"
+    }
+  ]
+}

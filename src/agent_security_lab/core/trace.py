@@ -1,0 +1,57 @@
+"""Trace recording: every security-relevant event of a session, JSONL-persisted.
+
+The trace is the ground truth for flag assertions — flags fire on observed
+side effects, never on what the model merely said.
+"""
+from __future__ import annotations
+
+import json
+import time
+import uuid
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+@dataclass
+class TraceEvent:
+    ts: float
+    session_id: str
+    kind: str  # user_msg | model_msg | tool_call | tool_result | sink_event | note
+    data: dict
+
+
+class Tracer:
+    def __init__(self, session_id: str | None = None, trace_dir: Path | None = None):
+        self.session_id = session_id or uuid.uuid4().hex[:12]
+        self._trace_dir = trace_dir
+        self._events: list[TraceEvent] = []
+        self._fh = None
+        if trace_dir is not None:
+            trace_dir.mkdir(parents=True, exist_ok=True)
+            self._fh = open(trace_dir / f"{self.session_id}.jsonl", "a", encoding="utf-8")
+
+    def record(self, kind: str, **data) -> TraceEvent:
+        ev = TraceEvent(ts=time.time(), session_id=self.session_id, kind=kind, data=data)
+        self._events.append(ev)
+        if self._fh:
+            self._fh.write(json.dumps(asdict(ev), ensure_ascii=False) + "\n")
+            self._fh.flush()
+        return ev
+
+    @property
+    def events(self) -> list[TraceEvent]:
+        return list(self._events)
+
+    def of_kind(self, kind: str) -> list[TraceEvent]:
+        return [e for e in self._events if e.kind == kind]
+
+    def tool_call_events(self, name: str | None = None) -> list[TraceEvent]:
+        events = self.of_kind("tool_call")
+        if name is not None:
+            events = [e for e in events if e.data.get("name") == name]
+        return events
+
+    def close(self) -> None:
+        if self._fh:
+            self._fh.close()
+            self._fh = None

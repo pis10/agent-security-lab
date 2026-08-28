@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-base text-slate-200 antialiased;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
+  /* subtle ops-room grid */
+  background-image:
+    linear-gradient(rgba(31, 39, 51, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 39, 51, 0.35) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@layer components {
+  .panel {
+    @apply bg-panel border border-edge rounded-lg;
+  }
+  .panel-title {
+    @apply text-xs font-mono uppercase tracking-widest text-dim;
+  }
+  .btn {
+    @apply px-3 py-1.5 rounded-md border border-edge bg-elevated text-sm text-slate-200
+      hover:border-slate-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn border-accent/60 text-accent hover:bg-accent/10;
+  }
+  .btn-ok {
+    @apply btn border-ok/60 text-ok hover:bg-ok/10;
+  }
+  .chip {
+    @apply inline-block px-1.5 py-0.5 rounded text-[10px] font-mono border border-edge text-dim;
+  }
+}
+
+/* flag capture banner */
+@keyframes flag-pulse {
+  0%, 100% { box-shadow: 0 0 24px rgba(63, 185, 80, 0.35); }
+  50% { box-shadow: 0 0 48px rgba(63, 185, 80, 0.65); }
+}
+.flag-banner {
+  animation: flag-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.cursor-blink { animation: blink 1s step-end infinite; }
+
+/* thin scrollbars for consoles */
+.console-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.console-scroll::-webkit-scrollbar-thumb { background: #1f2733; border-radius: 3px; }
+.console-scroll::-webkit-scrollbar-track { background: transparent; }

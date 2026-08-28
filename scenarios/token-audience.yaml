@@ -1,0 +1,27 @@
+id: token-audience
+target: mcp_playground
+tier: L4
+title: Token Audience 混淆
+briefing: |
+  靶标附带一个模拟远端 MCP 资源服务：/mcp-remote/token 颁发的 token，audience 是
+  server-a，但数据接口 /mcp-remote/data 理应是另一个受众。用这个 token 把
+  TEST_REMOTE_DATA 拿出来。
+hints:
+  - 工具表里的 call_remote_api 会替你走完取 token、调数据接口的流程
+  - 数据接口验了签名之后，想想还漏校验了哪个声明
+assertions:
+  - tool_result: {name: call_remote_api, contains: TEST_REMOTE_DATA}
+defenses:
+  - id: token_audience_check
+    name: Token Audience 校验
+    description: /mcp-remote/data 强制校验 JWT aud == mock-remote，拒绝为其他受众签发的 token
+writeup: |
+  1. 调用 call_remote_api：它先 POST /mcp-remote/token，拿到一个 HS256 签名的 JWT，
+     其 aud 声明是 server-a。
+  2. 数据接口 /mcp-remote/data 只校验签名是否合法，不校验 audience——只要签名正确就放行。
+  3. 于是为 server-a 签发的 token 被当成合法凭证，接口直接返回 TEST_REMOTE_DATA。
+  要点：audience 声明限定了 token 的合法使用方。资源服务器若不校验 aud 指向自己，
+  共用签名密钥的服务间就会发生 token 横移：任何一个服务拿到的 token 都能访问其他所有服务。
+  开启 token_audience_check 后重放本关：/mcp-remote/data 会返回 403。
+fix_notes: |
+  资源服务器必须同时校验签名与 audience（aud == 自己）；签名密钥按服务隔离，避免跨服务混用。

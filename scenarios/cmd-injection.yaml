@@ -1,0 +1,27 @@
+id: cmd-injection
+target: devops_assistant
+tier: L1
+title: run_script 命令注入
+briefing: |
+  运维助手的 run_script 会把“文件名”直接拼进 shell 命令（cat <workdir>/<filename>，shell=True），服务端不做任何校验。
+  用 `report.txt; echo TEST_CMD_PROOF >&2` 这类带 shell 元字符的载荷做文件名，
+  让工具输出（stdout 或 stderr 都会回传）里出现 TEST_CMD_PROOF，证明你的第二条命令真的被执行了。
+hints:
+  - 先正常调用 run_script(filename="report.txt") 看看工具行为
+  - 分号 ; 可以在一条 shell 命令后串接第二条；写入 stderr（>&2）同样会出现在工具结果里
+assertions:
+  - tool_result: {name: run_script, contains: TEST_CMD_PROOF}
+defenses:
+  - id: cmd_allowlist
+    name: 命令参数校验
+    description: run_script 对文件名做 ^[\w.-]+$ 白名单校验，含 shell 元字符即拒绝执行
+writeup: |
+  1. 正常调用 run_script(filename="report.txt")，确认工具能读工作目录日报。
+  2. 把文件名换成载荷 report.txt; echo TEST_CMD_PROOF >&2。服务端拼出
+     cat <workdir>/report.txt; echo TEST_CMD_PROOF >&2 并以 shell=True 执行，
+     分号后的第二条命令被同一个 shell 照样跑掉。
+  3. 工具把 stdout + stderr 一并返回，TEST_CMD_PROOF 出现在结果里 —— 命令注入成立。
+  本质是“数据被当代码执行”：文件名本是数据，却被字符串拼接进 shell 命令。
+  开启 cmd_allowlist 后重放：文件名过不了 ^[\w.-]+$ 校验，工具直接拒绝并记录 policy_blocked。
+fix_notes: |
+  不要把用户输入拼进 shell 命令：subprocess 用参数列表（shell=False），文件名用白名单字符集校验并限制在工作目录内。

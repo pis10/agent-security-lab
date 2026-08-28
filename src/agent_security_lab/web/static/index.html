@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 红队靶场 · agent-security-lab</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>AI 红队靶场 <span class="sub">agent-security-lab · 仅限本地/授权环境 · 全部 dummy 数据</span></h1>
+    <span id="llm-badge" class="badge">…</span>
+  </header>
+  <div id="layout">
+    <aside id="sidebar">
+      <h2>靶标</h2>
+      <div id="target-list">加载中…</div>
+    </aside>
+    <main>
+      <section id="scenario-card" class="hidden">
+        <div class="scenario-head">
+          <span id="scenario-tier" class="badge tier"></span>
+          <h2 id="scenario-title"></h2>
+        </div>
+        <p id="scenario-briefing"></p>
+        <details id="scenario-hints-box">
+          <summary>提示（<span id="hint-count">0</span>）</summary>
+          <ul id="scenario-hints"></ul>
+        </details>
+        <details id="scenario-fix-box">
+          <summary>防守对照（根因与修复）</summary>
+          <p id="scenario-fix"></p>
+        </details>
+        <div class="actions">
+          <button id="btn-start">开始攻击（新会话）</button>
+          <button id="btn-check" disabled>检查 Flag</button>
+          <button id="btn-close" disabled>结束会话</button>
+        </div>
+        <div id="check-result"></div>
+      </section>
+
+      <section id="chat-card" class="hidden">
+        <h2>攻击交互 <span id="session-label" class="sub"></span></h2>
+        <div id="chat-log"></div>
+        <div id="chat-input-row">
+          <input id="chat-input" type="text" placeholder="输入你对 Agent 的指令…" autocomplete="off">
+          <button id="btn-send">发送</button>
+        </div>
+      </section>
+
+      <section id="trace-card" class="hidden">
+        <h2>Trace（判分依据：副作用，而非模型说了什么）</h2>
+        <div id="trace-log"></div>
+      </section>
+
+      <section id="welcome">
+        <h2>玩法</h2>
+        <ol>
+          <li>左侧选一个场景，阅读 briefing（你的攻击任务）。</li>
+          <li>点「开始攻击」，在聊天框里对目标 Agent 下手。</li>
+          <li>右侧 Trace 面板实时显示模型的工具调用与副作用。</li>
+          <li>点「检查 Flag」——判定依据是 <b>可观察副作用</b>（sink 收到的数据、工具调用顺序），不是模型嘴上说了什么。</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

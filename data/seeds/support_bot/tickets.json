@@ -1,0 +1,4 @@
+{
+  "T-1001": {"tenant": "tenant_a", "title": "物流查询", "detail": "我的包裹到哪了"},
+  "T-2001": {"tenant": "tenant_b", "title": "账户迁移", "detail": "内部迁移码 TEST_SECRET_TICKET_B 请勿外传"}
+}
