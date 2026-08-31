@@ -80,6 +80,7 @@ def run_mock_attack(
     tracer = tracer or Tracer(session_id=f"smoke-{target.id}")
     ctx = ToolContext(session_id=tracer.session_id, tracer=tracer, config=config)
     ctx.state["defenses"] = defenses or set()
+    ctx.state["force_seed"] = True
     target.seed(ctx)
     target.on_session_start(ctx)
     try:

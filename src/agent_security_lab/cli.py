@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 
 
@@ -24,8 +25,15 @@ def main() -> None:
     p_rt.add_argument("--defenses", default="", help="逗号分隔的防护 id 列表（默认不开防护）")
 
     p_rep = sub.add_parser("report", help="由 trace 证据生成通关报告（Markdown）")
-    p_rep.add_argument("session_id", help="会话 id（traces/<session_id>.jsonl）")
+    p_rep.add_argument("target_id", help="产品 id（data/runtime/worlds/<id>/trace.jsonl）")
     p_rep.add_argument("--scenario", required=True, help="场景 id")
+
+    p_reset = sub.add_parser("reset", help="清掉产品世界与痕迹；种子 data/seeds 不动")
+    p_reset.add_argument(
+        "--progress",
+        action="store_true",
+        help="连通关进度一起清（教学里的「已完成」回到 0）",
+    )
 
     args = parser.parse_args()
 
@@ -77,10 +85,53 @@ def main() -> None:
         if scenario is None:
             raise SystemExit(f"未知场景 {args.scenario!r}，用 `asl scenarios` 查看列表")
         config = load_config()
-        events = load_trace_events(config.trace_dir, args.session_id)
+        from .core.db import WORLDS_DIR
+        from .core.trace import TraceEvent
+
+        world_trace = WORLDS_DIR / args.target_id / "trace.jsonl"
+        if world_trace.exists():
+            events = []
+            for line in world_trace.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    d = json.loads(line)
+                    events.append(
+                        TraceEvent(ts=d["ts"], session_id=d["session_id"], kind=d["kind"], data=d.get("data") or {})
+                    )
+        else:
+            events = load_trace_events(config.trace_dir, args.target_id)
         if not events:
-            raise SystemExit(f"找不到 trace: {config.trace_dir}/{args.session_id}.jsonl")
-        print(generate_report(scenario, args.session_id, events, []))
+            raise SystemExit(f"找不到 trace: {world_trace}")
+        print(generate_report(scenario, args.target_id, events, []))
+    elif args.command == "reset":
+        _reset_runtime(progress=args.progress)
+
+
+def _reset_runtime(*, progress: bool) -> None:
+    """Wipe product worlds and leftover run dirs. Never touches data/seeds."""
+    import shutil
+
+    from .config import load_config
+    from .core.db import RUNTIME_DIR
+
+    removed_dirs = 0
+    if RUNTIME_DIR.exists():
+        for child in RUNTIME_DIR.iterdir():
+            if child.name == "progress.db" and not progress:
+                continue
+            if child.is_dir():
+                shutil.rmtree(child)
+                removed_dirs += 1
+            else:
+                child.unlink()
+    traces = load_config().trace_dir
+    removed_traces = 0
+    if traces.exists():
+        for f in traces.glob("*.jsonl"):
+            f.unlink()
+            removed_traces += 1
+    extra = "，通关进度已清" if progress else "（通关进度保留，加 --progress 可一起清）"
+    print(f"已删除 {removed_dirs} 个运行目录、{removed_traces} 条 trace{extra}")
+    print("种子 data/seeds/ 未改动。若 asl serve 正在跑，请重启后再打开产品。")
 
 
 if __name__ == "__main__":

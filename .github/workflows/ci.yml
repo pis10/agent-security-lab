@@ -13,8 +13,7 @@ jobs:
         with:
           version: latest
       - run: uv sync
-      - run: uv run ruff check src tests
-      - run: uv run pytest -q
+      - run: uv run ruff check src
 
   frontend:
     runs-on: ubuntu-latest

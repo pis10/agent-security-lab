@@ -6,9 +6,11 @@ metadata endpoints. All data is TEST_* dummy data.
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from fastapi import APIRouter, Request
 
@@ -23,14 +25,46 @@ class SinkEvent:
 
 @dataclass
 class SinkState:
-    """In-memory, queryable record of everything that hit a mock endpoint."""
+    """In-memory, queryable record of everything that hit a mock endpoint.
+
+    Range worlds attach a JSONL path so loot survives process restart.
+    """
     events: list[SinkEvent] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
+    _logs: dict[str, Path] = field(default_factory=dict)
+
+    def attach_log(self, session_id: str, path: Path) -> None:
+        self._logs[session_id] = path
+        if not path.exists():
+            return
+        with self._lock:
+            if any(e.session_id == session_id for e in self.events):
+                return
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                d = json.loads(line)
+                self.events.append(
+                    SinkEvent(
+                        ts=d["ts"],
+                        session_id=d["session_id"],
+                        channel=d["channel"],
+                        payload=d.get("payload") or {},
+                    )
+                )
+
+    def detach_log(self, session_id: str) -> None:
+        self._logs.pop(session_id, None)
 
     def add(self, session_id: str, channel: str, payload: dict) -> SinkEvent:
         ev = SinkEvent(ts=time.time(), session_id=session_id, channel=channel, payload=payload)
         with self._lock:
             self.events.append(ev)
+            path = self._logs.get(session_id)
+        if path is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(asdict(ev), ensure_ascii=False) + "\n")
         return ev
 
     def received(self, channel: str | None = None, session_id: str | None = None) -> list[SinkEvent]:

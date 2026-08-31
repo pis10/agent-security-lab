@@ -1,4 +1,5 @@
 import type { CheckResult } from "../types";
+import { Icon } from "./Icon";
 
 export function assertionLabel(assertion: Record<string, any>): string {
   if (assertion.sink_received) {
@@ -19,14 +20,22 @@ export function assertionLabel(assertion: Record<string, any>): string {
 }
 
 export function ObjectiveList({ check }: { check: CheckResult | null }) {
-  if (!check) return <div className="text-dim text-xs">// 建立会话后显示目标</div>;
+  if (!check)
+    return (
+      <div className="flex items-center gap-1.5 text-dim text-xs">
+        <Icon name="target" size={12} />
+        建立会话后显示目标
+      </div>
+    );
   return (
     <ul className="space-y-1.5">
       {check.results.map((r, i) => (
         <li key={i} className="flex items-start gap-2 text-[13px]" title={r.detail}>
-          <span className={`font-mono ${r.passed ? "text-ok" : "text-dim"}`}>
-            {r.passed ? "◉" : "○"}
-          </span>
+          <Icon
+            name={r.passed ? "check" : "target"}
+            size={13}
+            className={`mt-0.5 ${r.passed ? "text-ok" : "text-dim"}`}
+          />
           <span className={r.passed ? "text-ok" : "text-slate-300"}>{assertionLabel(r.assertion)}</span>
         </li>
       ))}

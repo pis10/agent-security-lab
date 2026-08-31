@@ -22,7 +22,7 @@
 | Ch10 Workflow / Multi-Agent / Memory | 记忆工具 + `memory-poisoning` 场景 | 🟡 多 Agent/工作流靶标待建 |
 | Ch11 测试方法论（五步法） | 场景断言 + trace 即攻击链证据；`asl report` / 工作区一键生成通关报告（附录 B 模板） | ✅ |
 | Ch12 10 个本地实验 | 12 场景覆盖实验 2/3/5/6/7/10 及扩展 | ✅ 12 场景 |
-| Ch13 自动化红队 | `redteam.py`：攻击方 LLM 驱动目标，报成功率；`tests/test_scenarios_e2e.py` MockLLM 确定性回归 | ✅ |
+| Ch13 自动化红队 | `redteam.py`：攻击方 LLM 驱动目标，报成功率；MockLLM 可离线回放 | ✅ |
 
 ## 场景 YAML 与断言 DSL
 
@@ -55,8 +55,8 @@ fix_notes: |                # 防守对照（根因 + 确定性修复）
 
 ## 平台架构（M2）
 
-- **后端**：FastAPI（`web/app.py`）提供 `/api/*`（targets/scenarios/sessions/chat/flag/progress/report）、`/api/sim/*`（仿真产品数据）、`/sink/*` 与 `/internal/*`（mock 外发/内网），并托管 `frontend/dist`。进度存 `core/db.py` 的 SQLite（`data/runtime/progress.db`）；各靶标业务数据也是 per-session SQLite。
-- **前端**：React + Vite + Tailwind（`frontend/`）。任务板（MissionBoard）→ 三栏工作区（Workspace）：左栏仿真产品（`frontend/src/sims/`，每靶标一个 sim 组件，契约见 `SimProps`），中栏对话，右栏 trace 控制台 + 防护开关 + Flag/报告。Vite dev server 代理 `/api`、`/sink`、`/internal`、`/mcp-remote`、`/sites` 到 :8600。
+- **后端**：FastAPI（`web/app.py`）提供 `/api/worlds/*`（产品世界 ensure/chat/trace/sim/sink/observations/defenses/reset/report）、`/sink/*` 与 `/internal/*`，并托管 `frontend/dist`。进度存 `data/runtime/progress.db`；产品业务数据在 `data/runtime/worlds/<target_id>/`。
+- **前端**：React + Vite + Tailwind（`frontend/`）。三套入口：教学（`/learn`）、靶场（`/`、`/range/:targetId`）、观测（`/observe`）。每款产品一份持久世界，落在 `data/runtime/worlds/<target_id>/`（业务库、轨迹、外发、对话、防护），进程重启后仍在；UI「重置」或 `asl reset` 才回到种子。观测是该产品的现场（轨迹 / 外发 / 防护），课表只在教学。防护是开关，不重建世界。无 `scenario_id` 的 Mock 走 idle 脚本。Vite 代理 `/api`、`/sink`、`/internal`、`/mcp-remote`、`/sites` 到 :8600。旧路由 `/t/:target/:scenario` 重定向到 `/range/:target?mission=`。
 - **自动化红队**：`redteam.py` 用第二个 LLM 实例扮演攻击者（系统提示 = 场景 briefing），多轮驱动目标 Agent，同一断言引擎判定，报 N 次成功率；MockLLM 模式下攻击方只说一句开场白，目标回放标准答案脚本，供离线回归。
 
 ## 靶标脆弱点速查

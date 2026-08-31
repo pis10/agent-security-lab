@@ -82,6 +82,7 @@ def _run_once(
     tracer = Tracer(session_id=session_id, trace_dir=config.trace_dir)
     ctx = ToolContext(session_id=session_id, tracer=tracer, config=config)
     ctx.state["defenses"] = defenses
+    ctx.state["force_seed"] = True
     SINKS.purge_session(session_id)
     target.seed(ctx)
     target.on_session_start(ctx)

@@ -33,12 +33,14 @@ docker run --rm -p 8600:8600 -e ASL_LLM_API_KEY=<your-key> agent-security-lab
 
 ## 玩法
 
-1. 任务板上选场景，读 briefing（你的攻击任务）与学习目标。
-2. 进入三栏工作区：左边是**仿真产品**（邮件客户端 / 电商后台 / 运维控制台 / MCP 市场 / 仿真浏览器），中间是和目标 Agent 的对话，右边是实时 trace 控制台。
-3. 在仿真产品里翻翻数据找攻击面，把 payload 藏进邮件 / 工单 / 网页，诱导 Agent 中招。
-4. 达成可观察副作用后 Flag 自动点亮；右下角可一键生成本关**通关报告**（Markdown，含攻击链与证据）。
-5. 打开**防护开关**再攻一次：攻击应被 `policy_blocked` 拦截——攻击 → 加固 → 复测。
-6. 做完看「攻击解析」：根因 + 确定性修复（Prompt 加固永远只是纵深防御）。
+教学、靶场、观测是三套入口，不要混在一个三明治工作区里。
+
+1. **靶场**（`/`）：打开 NovaMail / 星橙集市等仿真产品。产品全屏，漏洞在工具和种子数据里。默认自由漫游，本产品上的课程做静默观察。
+2. **教学**（`/learn`）：简报、判定条件、提示、防护说明、通关解析。从课程可以「带着本课进入靶场」，产品仍全屏，任务只挂在顶栏操作条。
+3. **观测**（`/observe`）：该产品的现场。看工具轨迹、外发数据，并在这里开关防护。课表仍在教学。
+4. 在产品里翻数据、对内置助手说话。状态会留下来，关掉服务器再开还在。打出可观察副作用后，课程解锁解析。
+5. 在观测页打开防护再攻一次：应被 `policy_blocked` 拦截。要干净复测，先点「重置」。
+6. 解析在教学页，不在产品里。Prompt 加固永远只是纵深防御。
 
 ## 命令行
 
@@ -48,7 +50,9 @@ uv run asl targets        # 列出靶标
 uv run asl scenarios      # 列出场景
 uv run asl redteam --scenario smoke-mail-agent --runs 3   # 自动化红队：攻击方 LLM 驱动目标，报成功率
 uv run asl redteam --scenario ticket-idor --defenses tenant_acl   # 开启防护复测
-uv run asl report <session_id> --scenario smoke-mail-agent   # 由 trace 生成通关报告
+uv run asl report mail_agent --scenario smoke-mail-agent   # 由产品世界的 trace 生成通关报告
+uv run asl reset              # 清所有产品世界与痕迹；种子不动
+uv run asl reset --progress   # 同上，并清掉通关进度
 ```
 
 `redteam` 遵循"报告成功率而非一次侥幸"的原则：同一场景跑 N 次，统计攻击成功率；加 `--defenses` 即变为加固复测。
@@ -63,14 +67,7 @@ uv run asl report <session_id> --scenario smoke-mail-agent   # 由 trace 生成�
 | `mcp_playground` MCP 市场 | 工具市场 | 工具描述投毒 / Token audience 混淆 | `token-audience` (L4) · `smoke-mcp-playground` (L4) |
 | `browser_agent` 浏览助手 | 仿真浏览器 | 隐藏注释注入 → 内部页 → 外发链 | `comment-injection-probe` (L3) · `smoke-browser-agent` (L5) |
 
-每个靶标的 `mock_scripts[scenario_id]` 是该场景的"标准答案"脚本，供离线回放与 CI 回归。
-
-## 测试
-
-```bash
-uv run pytest            # 37 个测试：core 单测 + 12 场景攻击回放 + 防护阻断 + 红队/报告（全部离线）
-uv run ruff check src tests
-```
+每个靶标的 `mock_scripts[scenario_id]` 是该场景的"标准答案"脚本，供离线回放。
 
 ## 结构
 
@@ -79,13 +76,13 @@ src/agent_security_lab/
 ├── core/        # LLM 客户端(OpenAI 兼容+Mock)、agent loop、工具、trace、flag 断言、mock sink、
 │                # progress DB (SQLite)、报告生成
 ├── targets/     # 5 个故意脆弱的靶标应用（SQLite 业务库 + 防护开关 + 仿真数据接口）
-├── web/         # FastAPI：会话/聊天/flag/sim/sink/progress/report API，托管前端 dist
+├── web/         # FastAPI：产品世界/聊天/sim/sink/progress/report API，托管前端 dist
 ├── redteam.py   # 自动化红队驱动（攻击方 LLM ↔ 目标 Agent）
 ├── config.py / scenario.py / testing.py / cli.py
-frontend/        # React + Vite + Tailwind：任务板、三栏工作区、5 套仿真产品 UI
+frontend/        # React + Vite + Tailwind：靶场 / 教学 / 观测，5 套仿真产品 UI
 scenarios/       # 12 个场景 YAML（briefing + 断言 + 防护 + 攻击解析）
 data/seeds/      # 种子数据（知识库、邮件、站点页面……）
-data/runtime/    # per-session 运行态（gitignored）
+data/runtime/    # 产品世界 worlds/<target_id>/ 与通关进度（gitignored）
 docs/design.md   # PDF 章节 ↔ 靶标/场景映射与断言 DSL 参考
 ```
 

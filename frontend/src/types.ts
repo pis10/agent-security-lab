@@ -52,7 +52,11 @@ export interface CheckItem {
 
 export interface CheckResult {
   scenario_id: string;
+  title?: string;
+  tier?: string;
   passed: boolean;
+  passed_count?: number;
+  total?: number;
   results: CheckItem[];
 }
 
@@ -61,13 +65,34 @@ export interface ChatMessage {
   content: string;
 }
 
+/** Persistent product world. */
+export interface WorldInfo {
+  target_id: string;
+  scenario_id: string | null;
+  created: number;
+  enabled_defenses: string[];
+  event_count: number;
+  sink_count: number;
+  messages?: ChatMessage[];
+}
+
+/** Silent observer: which attack chains currently hold in this product world. */
+export interface Observation {
+  scenario_id: string;
+  title: string;
+  tier: string;
+  passed: boolean;
+  passed_count: number;
+  total: number;
+}
+
 export type ProgressMap = Record<
   string,
   { session_id: string; defenses: string[]; captured_at: number }
 >;
 
-/** Contract between Workspace (owns all API/polling/session lifecycle) and a
- * per-target simulated product UI (renders the product, sends attack inputs). */
+/** Contract between the range Workspace and a per-target simulated product UI.
+ * Products render only sim_state + chat; teaching copy stays on /learn. */
 export interface SimProps {
   sessionId: string;
   simState: Record<string, any>;

@@ -175,7 +175,14 @@ def on_session_start(ctx: ToolContext) -> None:
     ]
     if not servers:
         return  # 无进程内服务（例如纯离线调用），无需挂载
-    app = servers[0].config.app
+    config = servers[0].config
+    # uvicorn 以导入字符串启动时 config.app 是 str,真实应用在 config.loaded_app;
+    # 且可能被 ProxyHeadersMiddleware 等包装——向内解包到 FastAPI 实例
+    app = config.app if not isinstance(config.app, str) else getattr(config, "loaded_app", None)
+    while app is not None and not hasattr(app, "add_route") and hasattr(app, "app"):
+        app = app.app
+    if app is None or not hasattr(app, "routes"):
+        return  # 拿不到宿主应用,跳过(会话本身不受影响)
     if any(getattr(route, "path", "").startswith("/sites") for route in app.routes):
         return  # 宿主应用已挂载 /sites/
 

@@ -1,11 +1,8 @@
 """SQLite data layer (stdlib only).
 
-Two distinct uses, by design:
 - Global progress DB (data/runtime/progress.db): flag captures across restarts.
-- Per-session target DBs (data/runtime/<session>/target.db): realistic business
-  data for targets — enables real SQL and, later, SQLi scenarios.
-
-Traces stay JSONL and sinks stay in-memory: logs are append-only, loot is volatile.
+- Product worlds (data/runtime/worlds/<target_id>/): persistent range state.
+- Ephemeral run dirs (data/runtime/<session_id>/): redteam / mock replay only.
 """
 from __future__ import annotations
 
@@ -15,8 +12,18 @@ import time
 from pathlib import Path
 
 from ..config import PROJECT_ROOT
+from .tools import ToolContext
 
 RUNTIME_DIR = PROJECT_ROOT / "data" / "runtime"
+WORLDS_DIR = RUNTIME_DIR / "worlds"
+
+
+def world_path(ctx: ToolContext) -> Path:
+    """Directory for this run's business files. Range UI sets state['world_dir']."""
+    custom = ctx.state.get("world_dir")
+    path = Path(custom) if custom else RUNTIME_DIR / ctx.session_id
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def connect(path: Path) -> sqlite3.Connection:

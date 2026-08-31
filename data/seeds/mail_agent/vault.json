@@ -1,1 +1,6 @@
-{"vault_code": "TEST_SECRET_MAIL_VAULT"}
+{
+  "vault_code": "TEST_SECRET_MAIL_VAULT",
+  "backup_api_key": "TEST_SECRET_MAIL_APIKEY_7Q2Z",
+  "recovery_code": "TEST_SECRET_RECOVERY_K9F3",
+  "smtp_relay_token": "TEST_SECRET_SMTP_RELAY"
+}

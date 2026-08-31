@@ -21,14 +21,37 @@ class TraceEvent:
 
 
 class Tracer:
-    def __init__(self, session_id: str | None = None, trace_dir: Path | None = None):
+    def __init__(
+        self,
+        session_id: str | None = None,
+        trace_dir: Path | None = None,
+        path: Path | None = None,
+    ):
         self.session_id = session_id or uuid.uuid4().hex[:12]
-        self._trace_dir = trace_dir
         self._events: list[TraceEvent] = []
         self._fh = None
-        if trace_dir is not None:
-            trace_dir.mkdir(parents=True, exist_ok=True)
-            self._fh = open(trace_dir / f"{self.session_id}.jsonl", "a", encoding="utf-8")
+        if path is not None:
+            self._path = path
+        elif trace_dir is not None:
+            self._path = trace_dir / f"{self.session_id}.jsonl"
+        else:
+            self._path = None
+        if self._path is not None:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            if self._path.exists():
+                for line in self._path.read_text(encoding="utf-8").splitlines():
+                    if not line.strip():
+                        continue
+                    d = json.loads(line)
+                    self._events.append(
+                        TraceEvent(
+                            ts=d["ts"],
+                            session_id=d["session_id"],
+                            kind=d["kind"],
+                            data=d.get("data") or {},
+                        )
+                    )
+            self._fh = open(self._path, "a", encoding="utf-8")
 
     def record(self, kind: str, **data) -> TraceEvent:
         ev = TraceEvent(ts=time.time(), session_id=self.session_id, kind=kind, data=data)

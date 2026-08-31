@@ -3,38 +3,51 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
-  @apply bg-base text-slate-200 antialiased;
-  font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Segoe UI", sans-serif;
-  /* subtle ops-room grid */
-  background-image:
-    linear-gradient(rgba(31, 39, 51, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 39, 51, 0.35) 1px, transparent 1px);
-  background-size: 32px 32px;
+  @apply bg-slate-100 text-slate-800 antialiased;
+}
+
+::selection {
+  background: rgba(255, 82, 82, 0.28);
 }
 
 @layer components {
+  /* ── 深色控制台通用 ── */
   .panel {
     @apply bg-panel border border-edge rounded-lg;
   }
   .panel-title {
-    @apply text-xs font-mono uppercase tracking-widest text-dim;
+    @apply flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.15em] text-dim;
   }
   .btn {
-    @apply px-3 py-1.5 rounded-md border border-edge bg-elevated text-sm text-slate-200
-      hover:border-slate-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-edge
+      bg-elevated text-sm text-slate-200 hover:border-slate-500 hover:text-white
+      transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn border-accent/60 text-accent hover:bg-accent/10;
+    @apply btn border-accent/50 text-accent hover:bg-accent/10 hover:border-accent;
   }
   .btn-ok {
-    @apply btn border-ok/60 text-ok hover:bg-ok/10;
+    @apply btn border-ok/50 text-ok hover:bg-ok/10 hover:border-ok;
   }
   .chip {
-    @apply inline-block px-1.5 py-0.5 rounded text-[10px] font-mono border border-edge text-dim;
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-edge text-dim;
+  }
+  .chip-light {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-200 text-slate-500 bg-white;
+  }
+
+  /* ── 浅色仿真产品通用（靶场全屏产品表面） ── */
+  .p-card {
+    @apply bg-white border border-slate-200 rounded-lg shadow-product;
+  }
+  .p-input {
+    @apply bg-white border border-slate-300 rounded-md px-3 py-1.5 text-[13px] text-slate-800
+      outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100
+      transition disabled:bg-slate-50 disabled:text-slate-400;
   }
 }
 
@@ -53,7 +66,32 @@ body {
 }
 .cursor-blink { animation: blink 1s step-end infinite; }
 
-/* thin scrollbars for consoles */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.rise-in { animation: rise-in 0.25s ease-out both; }
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.live-dot { animation: live-pulse 1.8s ease-in-out infinite; }
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.live-dot { animation: live-pulse 1.8s ease-in-out infinite; }
+
+/* thin scrollbars for dark consoles */
 .console-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-.console-scroll::-webkit-scrollbar-thumb { background: #1f2733; border-radius: 3px; }
+.console-scroll::-webkit-scrollbar-thumb { background: #222c3a; border-radius: 3px; }
+.console-scroll::-webkit-scrollbar-thumb:hover { background: #324155; }
 .console-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* thin scrollbars for light product surfaces */
+.product-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.product-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.product-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.product-scroll::-webkit-scrollbar-track { background: transparent; }

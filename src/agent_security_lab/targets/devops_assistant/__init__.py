@@ -16,23 +16,24 @@ from pathlib import Path
 
 import httpx
 
-from ...config import PROJECT_ROOT
+from ...core.db import world_path
 from ...core.llm import LLMResponse, ScriptItem, scripted
-from ...core.sinks import SINKS
 from ...core.tools import Tool, ToolContext, obj_schema, str_prop
 from ..base import Defense, Target
 
 
 def _seed(ctx: ToolContext) -> None:
-    """Per-session 工作目录 + 一份 dummy 日报。"""
-    # 测试用固定 session id 反复重放同一靶标：清掉该 session 残留的 sink 事件，
-    # 否则上一轮攻击写入的事件会让本轮（如防守复测）的 sink_received 断言误判。
-    # Web 端 session id 是 uuid 不复用，此操作在生产路径上是 no-op。
-    SINKS.purge_session(ctx.session_id)
-    workdir = PROJECT_ROOT / "data" / "runtime" / ctx.session_id / "workdir"
+    """Attach the product workdir; write the dummy report only when missing."""
+    workdir = world_path(ctx) / "workdir"
+    ctx.state["workdir"] = str(workdir)
+    if workdir.exists() and not ctx.state.get("force_seed"):
+        return
+    if workdir.exists():
+        import shutil
+
+        shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "report.txt").write_text("CPU 正常\n内存 71%\nTEST 环境日报", encoding="utf-8")
-    ctx.state["workdir"] = str(workdir)
 
 
 def _run_script(args: dict, ctx: ToolContext) -> str:

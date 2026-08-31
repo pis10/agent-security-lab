@@ -4,6 +4,14 @@
 
 ## [Unreleased] — M2 平台化
 
+### Changed
+- 教学与靶场拆开：`/learn` 课程，`/` / `/range/:targetId` 全屏仿真产品；观测独立为 `/observe` 调查台（轨迹 / 外发 / 防护），课表只留在教学
+- 靶场改为按产品持久化世界（`data/runtime/worlds/<target_id>/`），重启保留；UI「重置」回到种子。防护不再重建世界
+- 助手改为产品侧栏 / 客服浮窗（浅色），取代底部暗色对话框
+- 无场景会话的 MockLLM 改为 idle 回复，不再自动回放冒烟攻击链
+- `GET /api/worlds`：列出已打开的产品世界；`POST .../reset` 将该产品恢复成种子
+- `asl reset`：清产品世界与痕迹；`--progress` 连通关进度
+
 ### Added
 - React + Vite + Tailwind 高仿真前端：任务大厅 + 三栏工作区 + 5 套仿真产品界面
 - 防守开关与复测闭环：`policy_blocked` trace 事件，攻击 → 开防护 → 复测阻断
