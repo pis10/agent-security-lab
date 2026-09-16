@@ -19,7 +19,7 @@ docker compose up -d --build
 # 打开 http://127.0.0.1:8600
 ```
 
-- 镜像多阶段构建：standalone 产物 + 生产 node_modules，以非 root 运行，容器内仅 `data/runtime` 可写——靶场故意保留真实命令执行（shell 注入面），容器就是安全边界。
+- 镜像多阶段构建：standalone 产物 + 生产 node_modules，以非 root 运行；容器根文件系统只读、丢弃全部 capabilities、`no-new-privileges`，唯一可写路径是 `data/runtime`——靶场故意保留真实命令执行（shell 注入面），容器就是安全边界。
 - 世界与通关进度持久化在命名卷 `asl-data`，重建容器不丢；想全部清零用 `docker compose down -v`。
 - 端口只发布到 `127.0.0.1:8600`，不要改成对外网开放。
 
@@ -53,7 +53,7 @@ app/             # Next.js App Router：页面（靶场/教学/观测）+ 全部
                  # （/api/*、攻击面端点 /sink/*、/internal/*、/mcp-remote/*、/sites/*）
 src/
 ├── core/        # LLM 客户端(OpenAI 兼容,原生 fetch)、agent loop、工具(Zod schema)、
-│                # trace、flag 断言、外发箱、progress DB (node:sqlite)、报告生成
+│                # trace、断言引擎、外发箱、progress DB (node:sqlite)、报告生成
 ├── targets/     # 5 个故意脆弱的靶标应用 + MCP stdio client + mock_remote(JWT)
 ├── world/       # WorldManager：持久产品世界（磁盘为准）与观测判定
 ├── scenarios/   # 5 个确定性场景（TS 定义：目标合同 + 判据 label + 防御 + 攻击解析）

@@ -7,21 +7,19 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { Agent } from "../core/agent.ts";
+import { Agent, type ReplayMessage } from "../core/agent.ts";
 import { ProgressDB, WORLDS_DIR } from "../core/db.ts";
+import { BadRequestError } from "../core/errors.ts";
 import { buildLlm } from "../core/llm.ts";
 import { SINKS } from "../core/sinks.ts";
 import { defensesOf, ToolContext, ToolRegistry } from "../core/tools.ts";
 import { Tracer } from "../core/trace.ts";
 import type { Config } from "../lib/config.ts";
 import { llmAvailable, loadConfig } from "../lib/config.ts";
+import { requireScenario } from "../scenarios/index.ts";
+import type { ChatMessage, WorldInfo } from "../shared/contracts.ts";
 import type { Target } from "../targets/base.ts";
 import { getTarget } from "../targets/registry.ts";
-
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
 
 export interface World {
   targetId: string;
@@ -31,6 +29,7 @@ export interface World {
   tracer: Tracer;
   scenarioId: string | null;
   created: number;
+  /**UI 聊天投影：由 agent 的完整回放历史派生，不是独立状态。 */
   messages: ChatMessage[];
 }
 
@@ -41,22 +40,28 @@ interface WorldMeta {
   scenario_id?: string | null;
 }
 
-export interface WorldInfo {
-  target_id: string;
-  scenario_id: string | null;
-  created: number;
-  enabled_defenses: string[];
-  event_count: number;
-  sink_count: number;
-  messages?: ChatMessage[];
+function chatPath(root: string): string {
+  return path.join(root, "chat.json");
 }
 
 function metaPath(root: string): string {
   return path.join(root, "meta.json");
 }
 
-function chatPath(root: string): string {
-  return path.join(root, "chat.json");
+function transcriptPath(root: string): string {
+  return path.join(root, "transcript.json");
+}
+
+/**UI 聊天是完整回放历史的投影：只留有正文的 user/assistant 消息
+ * （工具中转的空 content assistant 消息、tool 消息、system 都不进聊天框）。 */
+function projectChat(messages: ReplayMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const m of messages) {
+    if ((m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content !== "") {
+      out.push({ role: m.role, content: m.content });
+    }
+  }
+  return out;
 }
 
 function countJsonl(file: string): number {
@@ -76,7 +81,9 @@ export function diskSnapshot(targetId: string): WorldInfo | null {
     meta = { ...meta, ...(JSON.parse(readFileSync(metaPath(root), "utf8")) as WorldMeta) };
   }
   let messages: ChatMessage[] = [];
-  if (existsSync(chatPath(root))) {
+  if (existsSync(transcriptPath(root))) {
+    messages = projectChat(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
+  } else if (existsSync(chatPath(root))) {
     messages = JSON.parse(readFileSync(chatPath(root), "utf8")) as ChatMessage[];
   }
   return {
@@ -141,6 +148,10 @@ export class WorldManager {
   }
 
   async ensure(targetId: string, scenarioId: string | null = null): Promise<World> {
+    // 领域不变量在入口一次校验：场景必须存在且属于这个靶标
+    if (scenarioId !== null) {
+      requireScenario(scenarioId, targetId);
+    }
     if (!llmAvailable(this._config)) {
       throw new Error("未配置 LLM Key:请复制 .env.example 为 .env 并填入 ASL_LLM_API_KEY。");
     }
@@ -171,7 +182,7 @@ export class WorldManager {
     const valid = new Set(world.target.defenses.map((d) => d.id));
     const unknown = defenses.filter((d) => !valid.has(d));
     if (unknown.length > 0) {
-      throw new Error(`unknown defenses: ${JSON.stringify([...unknown].sort())}`);
+      throw new BadRequestError(`unknown defenses: ${JSON.stringify([...unknown].sort())}`);
     }
     return this._lock(async () => {
       world.ctx.state.defenses = new Set(defenses);
@@ -234,28 +245,27 @@ export class WorldManager {
 
   async chat(targetId: string, message: string): Promise<string> {
     const world = await this.ensure(targetId);
-    world.messages.push({ role: "user", content: message });
     let reply: string;
     try {
       reply = await world.agent.run(message, world.ctx);
     } catch (exc) {
-      // 中断的轮次也要收口：否则留下只有用户消息的半截对话，
-      // 用户离开页面回来后就是一条永远没有回复的消息。
+      // 中断的轮次也要收口：错误回复作为一条助手消息写入回放历史，
+      // UI 投影与模型上下文才不会分叉，页面回来也不会有永远没回复的消息。
       console.error(`world ${targetId} chat turn interrupted`, exc);
       reply = "[error] 这一轮助手没有跑完（目标侧中断）。可以重发一次，或到观测页查看这轮已发生的调用。";
+      world.agent.noteAssistant(reply);
     }
-    world.messages.push({ role: "assistant", content: reply });
-    this._saveChat(world);
+    this._syncChat(world);
     return reply;
   }
 
   async clearChat(targetId: string): Promise<World> {
-    /**丢弃当前对话并重建 agent。工单、轨迹、外发与防护保留。 */
+    /**丢弃当前对话并整体重建 agent（不带历史）。工单、轨迹、外发与防护保留。 */
     const world = await this.ensure(targetId);
     return this._lock(async () => {
+      world.agent = await this._makeAgent(world.target, world.ctx, world.tracer);
       world.messages = [];
-      await this._rebuildAgent(world);
-      this._saveChat(world);
+      this._syncChat(world);
       return world;
     });
   }
@@ -275,7 +285,7 @@ export class WorldManager {
   private async _runAct(world: World, action: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
     const actFn = world.target.act;
     if (!actFn) {
-      throw new Error("该产品没有这项操作");
+      throw new BadRequestError("该产品没有这项操作");
     }
     return actFn(world.ctx, action, args);
   }
@@ -315,9 +325,9 @@ export class WorldManager {
       };
     }
     if (scenarioId !== null) meta.scenario_id = scenarioId;
-    let messages: ChatMessage[] = [];
+    let legacyChat: ChatMessage[] = [];
     if (existsSync(chatPath(root))) {
-      messages = JSON.parse(readFileSync(chatPath(root), "utf8")) as ChatMessage[];
+      legacyChat = JSON.parse(readFileSync(chatPath(root), "utf8")) as ChatMessage[];
     }
 
     const tracer = new Tracer({ sessionId: targetId, path: path.join(root, "trace.jsonl") });
@@ -335,9 +345,17 @@ export class WorldManager {
       tracer,
       scenarioId: meta.scenario_id ?? null,
       created: meta.created ?? Date.now() / 1000,
-      messages,
+      messages: [],
     };
+    // 恢复完整回放历史（transcript.json 为准）；旧世界只有 chat.json 投影，
+    // 退回用「system + 投影」重建，模型上下文与 UI 至少不丢对话内容。
+    if (existsSync(transcriptPath(root))) {
+      world.agent.restore(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
+    } else if (legacyChat.length > 0) {
+      world.agent.restore([...world.agent.messages.slice(0, 1), ...legacyChat]);
+    }
     this._saveMeta(world);
+    this._syncChat(world);
     return world;
   }
 
@@ -351,7 +369,12 @@ export class WorldManager {
   }
 
   private async _rebuildAgent(world: World): Promise<void> {
+    // 重建只换 system 位 / 工具描述（MCP 投毒后），对话上下文原样保留。
+    // 必须立刻落盘：否则进程重启会从旧 transcript 把 system 位盖回去。
+    const rest = world.agent.messages.slice(1);
     world.agent = await this._makeAgent(world.target, world.ctx, world.tracer);
+    world.agent.restore([...world.agent.messages.slice(0, 1), ...rest]);
+    this._syncChat(world);
   }
 
   private _saveMeta(world: World): void {
@@ -364,12 +387,12 @@ export class WorldManager {
     writeFileSync(metaPath(world.ctx.state.world_dir as string), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   }
 
-  private _saveChat(world: World): void {
-    writeFileSync(
-      chatPath(world.ctx.state.world_dir as string),
-      `${JSON.stringify(world.messages, null, 2)}\n`,
-      "utf8",
-    );
+  /**聊天投影与持久化都从唯一正典（agent 回放历史）派生并落盘。 */
+  private _syncChat(world: World): void {
+    world.messages = projectChat(world.agent.messages);
+    const dir = world.ctx.state.world_dir as string;
+    writeFileSync(chatPath(dir), `${JSON.stringify(world.messages, null, 2)}\n`, "utf8");
+    writeFileSync(transcriptPath(dir), `${JSON.stringify(world.agent.messages, null, 2)}\n`, "utf8");
   }
 
   private _snapshot(world: World): WorldInfo {

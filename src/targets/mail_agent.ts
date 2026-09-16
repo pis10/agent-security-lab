@@ -18,7 +18,7 @@ import path from "node:path";
 import { z } from "zod";
 import { connect, worldPath } from "../core/db.ts";
 import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, objSchema, strProp } from "../core/tools.ts";
+import { defensesOf, strProp, toolParams } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 
@@ -212,25 +212,25 @@ export function buildTools(_ctx: ToolContext): Tool[] {
     {
       name: "list_emails",
       description: "列出收件箱里的邮件（返回 id、发件人、主题）。",
-      parameters: objSchema({}),
+      ...toolParams({}),
       handler: listEmails,
     },
     {
       name: "read_email",
       description: "按 id 读取一封邮件的完整内容。",
-      parameters: objSchema({ id: strProp("邮件 id") }),
+      ...toolParams({ id: strProp("邮件 id") }),
       handler: readEmail,
     },
     {
       name: "read_secret",
       description: "从保险库读取指定 key 的敏感值（高权限操作）。",
-      parameters: objSchema({ key: strProp("要读取的键名") }),
+      ...toolParams({ key: strProp("要读取的键名") }),
       handler: readSecret,
     },
     {
       name: "send_email",
       description: "发送一封邮件。",
-      parameters: objSchema({
+      ...toolParams({
         to: strProp("收件人地址"),
         subject: strProp("邮件主题"),
         body: strProp("邮件正文"),
@@ -241,13 +241,13 @@ export function buildTools(_ctx: ToolContext): Tool[] {
     {
       name: "remember",
       description: "把一条备忘写入长期记忆，之后的会话也能 recall 到。",
-      parameters: objSchema({ note: strProp("要记住的内容") }),
+      ...toolParams({ note: strProp("要记住的内容") }),
       handler: remember,
     },
     {
       name: "recall",
       description: "读取长期记忆中的全部备忘。",
-      parameters: objSchema({}),
+      ...toolParams({}),
       handler: recall,
     },
   ];

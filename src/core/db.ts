@@ -1,8 +1,8 @@
 /**SQLite 数据层（node:sqlite，stdlib only）。
  *
- * - 全局进度库 data/runtime/progress.db：跨重启的 flag 捕获记录。
+ * - 全局进度库 data/runtime/progress.db：跨重启的通关记录。
  * - 产品世界 data/runtime/worlds/<target_id>/：持久化的靶场状态。
- * 每次调用新开连接再关闭——语义与旧版一致，且避免长连接跨请求持有。
+ * 每次调用新开连接再关闭——简单直接，且避免长连接跨请求持有。
  */
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -32,7 +32,7 @@ export interface CapturedRecord {
   captured_at: number;
 }
 
-/**flag 捕获记录：哪些场景曾经被解出来过。 */
+/**通关记录：哪些场景曾经被解出来过。 */
 export class ProgressDB {
   private _path: string;
 

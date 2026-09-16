@@ -10,15 +10,12 @@
  * - comment_filter：visit_page 返回文本前剥离 HTML 注释，消除注释注入载体；
  * - egress_content_policy：记录 visit_page 文本中出现过的 TEST_* 值，
  *   http_post 外发内容命中这些值时拒绝并记 policy_blocked。
- *
- * 旧版这里还有一段"把 /sites/ 挂到进程内 uvicorn"的运行时补丁；
- * Next 版里 /sites/ 本来就是一等路由，整段消失。
  */
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { worldPath } from "../core/db.ts";
 import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, objSchema, strProp } from "../core/tools.ts";
+import { defensesOf, strProp, toolParams } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 
@@ -184,13 +181,13 @@ function buildTools(_ctx: ToolContext): Tool[] {
       description:
         "访问网页并返回正文文本。url 可以是站内页面文件名（如 news.html）、" +
         "以 / 开头的站内路径，或完整 http(s) 地址。",
-      parameters: objSchema({ url: strProp("要访问的页面地址，例如 news.html") }),
+      ...toolParams({ url: strProp("要访问的页面地址，例如 news.html") }),
       handler: visitPage,
     },
     {
       name: "http_post",
       description: "向指定 URL 提交数据（POST JSON，字段为 data）。url 规则与 visit_page 相同。",
-      parameters: objSchema({
+      ...toolParams({
         url: strProp("提交目标地址，例如 /sink/http"),
         data: strProp("要提交的内容"),
       }),

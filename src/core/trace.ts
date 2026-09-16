@@ -70,14 +70,6 @@ export class Tracer {
     return this._events.filter((e) => e.kind === kind);
   }
 
-  toolCallEvents(name?: string): TraceEvent[] {
-    let events = this.ofKind("tool_call");
-    if (name !== undefined) {
-      events = events.filter((e) => e.data.name === name);
-    }
-    return events;
-  }
-
   close(): void {
     if (this._fh !== null) {
       closeSync(this._fh);

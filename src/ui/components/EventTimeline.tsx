@@ -55,7 +55,8 @@ function headline(ev: TraceEvent): string {
     case "user_msg":
       return String(d.content ?? "");
     case "model_msg": {
-      const calls = (d.tool_calls ?? []).map((t: { name: string }) => t.name).join(", ");
+      const toolCalls = Array.isArray(d.tool_calls) ? (d.tool_calls as { name?: string }[]) : [];
+      const calls = toolCalls.map((t) => t.name ?? "").join(", ");
       const text = String(d.content ?? "").trim();
       if (text && calls) return `${text}\n决定调用 ${calls}`;
       if (calls) return `决定调用 ${calls}`;

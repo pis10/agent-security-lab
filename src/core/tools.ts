@@ -40,6 +40,8 @@ export interface Tool {
   description: string;
   /**JSON Schema object（zod 经 objSchema 构建，或 MCP 原样透传） */
   parameters: Record<string, unknown>;
+  /**运行时参数校验（toolParams 一并构建）；缺省（如 MCP 桥接工具）则原样透传 */
+  argSchema?: z.ZodType;
   handler: ToolHandler;
 }
 
@@ -78,6 +80,16 @@ export class ToolRegistry {
     if (tool === undefined) {
       return `[error] unknown tool: ${name}. Available: ${this.names.join(", ")}`;
     }
+    if (tool.argSchema) {
+      // 模型给的参数先过 zod：类型校验 + 剥离未知键，handler 不再拿裸 as string
+      const parsed = tool.argSchema.safeParse(args);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+        // 参数错误回流给模型，让它自我纠正后重试
+        return `[error] tool ${name} 参数不合法: ${issues}`;
+      }
+      args = parsed.data as Record<string, unknown>;
+    }
     try {
       const result = await tool.handler(args, ctx);
       return result;
@@ -91,7 +103,7 @@ export class ToolRegistry {
 
 // ── schema 助手：zod 一份定义同时充当 TS 类型、运行时校验与 LLM tool JSON Schema ──
 // 注意：zod 4 里 description 必须用 .describe()/strProp（构造参数里的 description 不进 JSON Schema）；
-// 输出剥掉 $schema 声明头，与旧版 Python obj_schema 的 wire 格式逐字节一致。
+// 输出剥掉 $schema 声明头，保持 wire 格式稳定（strict object + additionalProperties: false）。
 
 export function objSchema(properties: Record<string, z.ZodType>): Record<string, unknown> {
   const out = z.toJSONSchema(z.strictObject(properties)) as Record<string, unknown>;
@@ -99,6 +111,10 @@ export function objSchema(properties: Record<string, z.ZodType>): Record<string,
   return out;
 }
 
-export const strProp = (description: string) => z.string().describe(description);
+/**工具参数一步到位：给模型的 JSON Schema 用 strict（多一个键都拒绝），运行时解析用宽松
+ * object（未知键静默剥离，避免模型夹带无害多余字段导致工具整体失败）。 */
+export function toolParams(properties: Record<string, z.ZodType>): Pick<Tool, "parameters" | "argSchema"> {
+  return { parameters: objSchema(properties), argSchema: z.object(properties) };
+}
 
-export type Infer<T extends z.ZodType> = z.infer<T>;
+export const strProp = (description: string) => z.string().describe(description);

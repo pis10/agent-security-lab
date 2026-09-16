@@ -102,8 +102,9 @@ export class LLMClient implements LLM {
 
     let lastError: unknown = null;
     for (let attempt = 0; attempt < 2; attempt++) {
+      let resp: Response;
       try {
-        const resp = await fetch(`${this._baseUrl}/chat/completions`, {
+        resp = await fetch(`${this._baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -112,14 +113,6 @@ export class LLMClient implements LLM {
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(120_000),
         });
-        if (!resp.ok) {
-          const text = await resp.text();
-          if (attempt === 0 && (resp.status >= 500 || RETRYABLE_STATUS.has(resp.status))) {
-            continue; // 5xx/限流：重试一次
-          }
-          throw new Error(`LLM ${resp.status}: ${text.slice(0, 300)}`);
-        }
-        return parseChatResponse((await resp.json()) as ChatCompletionResponse);
       } catch (exc) {
         if (exc instanceof Error && exc.name === "TimeoutError") {
           throw new Error(
@@ -127,9 +120,20 @@ export class LLMClient implements LLM {
               "检查 ASL_LLM_BASE_URL 是否为订阅对应的端点。",
           );
         }
+        // 网络层异常（连接拒绝/重置等）：重试一次
         lastError = exc;
         if (attempt === 1) break;
+        continue;
       }
+      if (!resp.ok) {
+        const text = await resp.text();
+        if (attempt === 0 && (resp.status >= 500 || RETRYABLE_STATUS.has(resp.status))) {
+          continue; // 5xx/限流：重试一次
+        }
+        // 4xx（鉴权/请求不合法等）重试没有意义，立即失败
+        throw new Error(`LLM ${resp.status}: ${text.slice(0, 300)}`);
+      }
+      return parseChatResponse((await resp.json()) as ChatCompletionResponse);
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }

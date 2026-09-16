@@ -1,5 +1,5 @@
-/**Finding report 生成（PDF 附录 B 模板）：场景 + 轨迹证据。*/
-import type { Assertion } from "./flags.ts";
+/**Finding 报告生成：场景 + 轨迹证据（Markdown）。 */
+import type { Assertion } from "../shared/contracts.ts";
 import type { SinkEvent } from "./sinks.ts";
 import type { TraceEvent } from "./trace.ts";
 
@@ -91,7 +91,7 @@ ${chainLines.join("\n")}
 
 ## 证据
 
-trace 文件: \`traces/${sessionId}.jsonl\`
+trace 文件: \`data/runtime/worlds/${scenario.target}/trace.jsonl\`
 
 ${evidenceLines.join("\n")}
 ${blockedSection}

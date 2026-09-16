@@ -2,7 +2,7 @@
  *
  * start() -> listTools() / callTool() -> close()。
  * close() 会确认 server 子进程已退出、无残留——靶场把"MCP 不泄漏进程"
- * 当作硬性验收（旧版 Python 同样在 close 里校验）。
+ * 当作硬性验收。
  */
 import { exec } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";

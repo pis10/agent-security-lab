@@ -46,7 +46,7 @@ export const ticketIdor = {
    查询层没有任何访问控制。
 
 ## 防守复测
-开启 tenant_acl 后，跨租户行被过滤，访问被拒绝并在 trace 中留下 policy_blocked，断言失败。
+开启 tenant_acl 后，查询变为 \`WHERE id = ? AND tenant = ?\`，跨租户与 UNION 伪装均不可见，访问被拒绝并在 trace 中留下 policy_blocked，断言失败。
 
 ## 修复对照
 根因是查询层缺少对象级授权校验（且 SQL 用了字符串拼接）。修复：

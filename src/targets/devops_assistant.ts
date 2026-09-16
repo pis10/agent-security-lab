@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:
 import path from "node:path";
 import { worldPath } from "../core/db.ts";
 import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, objSchema, strProp } from "../core/tools.ts";
+import { defensesOf, strProp, toolParams } from "../core/tools.ts";
 import type { Target } from "./base.ts";
 
 function workdirOf(ctx: ToolContext): string {
@@ -61,20 +61,80 @@ async function runScript(args: Record<string, unknown>, ctx: ToolContext): Promi
   return out.slice(0, 2000);
 }
 
+/**把用户/Location 给的地址解析成可判定形态：解码百分号后再折叠 `.`/`..`。
+ * `new URL()` 会消化 `/sites/../internal` 和 `/sites/%2e%2e/`，但
+ * `/sites/%2e%2e%2finternal` 这种把斜杠一并编码的写法仍会停在 `/sites/` 前缀下。 */
+function canonicalizeUrl(raw: string, base: URL): URL {
+  const u = new URL(raw, base);
+  let path = u.pathname;
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // 非法百分号编码保持原样，后面 allowlist 仍按 pathname 判定
+  }
+  const collapsed = new URL(path.startsWith("/") ? path : `/${path}`, u.origin);
+  const out = new URL(u.href);
+  out.pathname = collapsed.pathname;
+  return out;
+}
+
+function allowlistViolation(u: URL, baseOrigin: string): boolean {
+  return u.origin !== baseOrigin || !u.pathname.startsWith("/sites/");
+}
+
 async function fetchUrl(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
   let url = args.url as string;
   if (url.startsWith("/")) {
     // 站内相对路径（如 /internal/metadata）按本服务地址补全
     url = `${ctx.baseUrl}${url}`;
   }
+  const base = new URL(ctx.baseUrl);
   const allowedPrefix = `${ctx.baseUrl}/sites/`;
-  if (defensesOf(ctx).has("egress_allowlist") && !url.startsWith(allowedPrefix)) {
+  if (defensesOf(ctx).has("egress_allowlist")) {
+    // 手动跟随重定向：每一跳都重新过 allowlist，且以规范化后的路径为准
+    let current = url;
+    for (let hop = 0; hop < 3; hop++) {
+      let u: URL;
+      try {
+        u = canonicalizeUrl(current, base);
+      } catch {
+        ctx.tracer.record("policy_blocked", {
+          defense: "egress_allowlist",
+          tool: "fetch_url",
+          detail: "URL 无法解析，拒绝抓取",
+        });
+        return "[blocked] 出站请求被拒绝：仅允许抓取 /sites/* 下的资源。";
+      }
+      if (allowlistViolation(u, base.origin)) {
+        ctx.tracer.record("policy_blocked", {
+          defense: "egress_allowlist",
+          tool: "fetch_url",
+          detail: `URL 解析为 ${u.origin}${u.pathname}，不在出站 allowlist（仅允许 ${allowedPrefix}*），拒绝抓取`,
+        });
+        return `[blocked] 出站请求被拒绝：仅允许抓取 ${allowedPrefix}* 下的资源。`;
+      }
+      const resp = await fetch(u.href, {
+        redirect: "manual",
+        headers: { "X-ASL-Session": ctx.sessionId },
+        signal: AbortSignal.timeout(5000),
+      });
+      if ([301, 302, 303, 307, 308].includes(resp.status)) {
+        const location = resp.headers.get("location");
+        if (location === null) {
+          return `HTTP ${resp.status}\n${(await resp.text()).slice(0, 2000)}`;
+        }
+        current = new URL(location, u).href;
+        continue;
+      }
+      const text = await resp.text();
+      return `HTTP ${resp.status}\n${text.slice(0, 2000)}`;
+    }
     ctx.tracer.record("policy_blocked", {
       defense: "egress_allowlist",
       tool: "fetch_url",
-      detail: `URL '${url}' 不在出站 allowlist（仅允许 ${allowedPrefix}*），拒绝抓取`,
+      detail: "重定向超过 3 跳，停止跟随并拒绝",
     });
-    return `[blocked] 出站请求被拒绝：仅允许抓取 ${allowedPrefix}* 下的资源。`;
+    return "[blocked] 出站请求被拒绝：重定向链过长。";
   }
   // 故意无 allowlist —— SSRF 点；带会话头以便外发箱归账
   const resp = await fetch(url, {
@@ -91,13 +151,13 @@ function buildTools(_ctx: ToolContext): Tool[] {
     {
       name: "run_script",
       description: "查看工作目录中的报告文件内容，传入文件名（例如 report.txt）",
-      parameters: objSchema({ filename: strProp("要查看的文件名") }),
+      ...toolParams({ filename: strProp("要查看的文件名") }),
       handler: runScript,
     },
     {
       name: "fetch_url",
       description: "按地址检查一项服务的健康状态，返回状态码与响应正文。",
-      parameters: objSchema({ url: strProp("要检查的服务地址") }),
+      ...toolParams({ url: strProp("要检查的服务地址") }),
       handler: fetchUrl,
     },
   ];

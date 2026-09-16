@@ -1,25 +1,13 @@
 /**观测判定：对世界跑场景断言、记录通关进度。 */
-import { assertionLabel, evaluate } from "../core/flags.ts";
+import { evaluate } from "../core/flags.ts";
 import { SINKS } from "../core/sinks.ts";
 import { defensesOf } from "../core/tools.ts";
 import type { Scenario } from "../scenarios/types.ts";
+import { assertionLabel, type Observation, type ObservationCheck } from "../shared/contracts.ts";
 import type { World } from "./manager.ts";
 import { getProgressDb } from "./manager.ts";
 
-export interface ObservationCheck {
-  label: string;
-  passed: boolean;
-}
-
-export interface Observation {
-  scenario_id: string;
-  title: string;
-  tier: string;
-  passed: boolean;
-  passed_count: number;
-  total: number;
-  checks: ObservationCheck[];
-}
+export type { Observation, ObservationCheck };
 
 export function evaluateScenario(world: World, scenario: Scenario): Observation {
   const results = evaluate(scenario.assertions, world.tracer, SINKS, world.targetId);
@@ -29,7 +17,7 @@ export function evaluateScenario(world: World, scenario: Scenario): Observation 
     const already = scenario.id in progressDb.captured();
     progressDb.recordCapture(scenario.id, world.targetId, [...defensesOf(world.ctx)].sort());
     if (!already) {
-      console.info(`FLAG captured: ${scenario.id} (world ${world.targetId})`);
+      console.info(`课程通关: ${scenario.id} (world ${world.targetId})`);
     }
   }
   const checks: ObservationCheck[] = results.map((r) => ({

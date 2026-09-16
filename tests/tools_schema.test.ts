@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
-import { objSchema, strProp, ToolContext, ToolRegistry, toolSchema } from "../src/core/tools.ts";
+import { objSchema, strProp, ToolContext, ToolRegistry, toolParams, toolSchema } from "../src/core/tools.ts";
 import { Tracer } from "../src/core/trace.ts";
 import { loadConfig } from "../src/lib/config.ts";
 
-test("objSchema 输出与旧版 Python obj_schema 逐字节一致", () => {
+test("objSchema 输出 strict object JSON Schema（无 $schema 头）", () => {
   const schema = objSchema({ filename: strProp("要查看的文件名") });
   assert.deepEqual(schema, {
     type: "object",
@@ -54,3 +54,39 @@ test("Registry:未知工具与抛错工具都返回 [error] 文本给模型", as
 function dummyCtx() {
   return new ToolContext("t", new Tracer({ sessionId: "t" }), loadConfig());
 }
+
+test("toolParams:argSchema 剥离未知键后交给 handler", async () => {
+  let seen: Record<string, unknown> = {};
+  const reg = new ToolRegistry([
+    {
+      name: "t",
+      description: "",
+      ...toolParams({ filename: strProp("f") }),
+      handler: (args) => {
+        seen = args;
+        return "ok";
+      },
+    },
+  ]);
+  const out = await reg.call("t", { filename: "a.txt", extra: "junk" }, dummyCtx());
+  assert.equal(out, "ok");
+  assert.deepEqual(seen, { filename: "a.txt" });
+});
+
+test("toolParams:类型不符返回 [error] 文本给模型，handler 不执行", async () => {
+  let executed = false;
+  const reg = new ToolRegistry([
+    {
+      name: "t",
+      description: "",
+      ...toolParams({ n: z.number().describe("num") }),
+      handler: () => {
+        executed = true;
+        return "ok";
+      },
+    },
+  ]);
+  const out = await reg.call("t", { n: "not-a-number" }, dummyCtx());
+  assert.match(out, /\[error\] tool t 参数不合法/);
+  assert.equal(executed, false);
+});

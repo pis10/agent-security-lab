@@ -24,7 +24,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { worldPath } from "../core/db.ts";
 import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, objSchema, strProp } from "../core/tools.ts";
+import { defensesOf, strProp, toolParams } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 import { McpStdioClient } from "./mcp_client.ts";
@@ -191,7 +191,7 @@ async function buildTools(ctx: ToolContext): Promise<Tool[]> {
   tools.push({
     name: "call_remote_api",
     description: "调用远端资源服务的数据接口 /mcp-remote/data。" + "参数 token：Bearer JWT 字符串（远端校验签名）。",
-    parameters: objSchema({ token: strProp("Bearer JWT 字符串（远端校验签名）") }),
+    ...toolParams({ token: strProp("Bearer JWT 字符串（远端校验签名）") }),
     handler: callRemoteApi,
   });
   return tools;

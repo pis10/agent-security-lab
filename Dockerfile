@@ -31,8 +31,10 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/mcpservers ./mcpservers
 COPY --from=builder /app/data/seeds ./data/seeds
-# node 用户对 runtime 目录可写（挂命名卷首次初始化会沿用该属主）
-RUN mkdir -p data/runtime && chown -R node:node /app
+# 只把可写的运行时目录交给 node 用户；应用文件（server、MCP scripts、seeds、
+# node_modules）保持 root 属主、对 node 只读——shell 注入拿到的是 r-x 的文件系统，
+# 想篡改运行中的应用代码必须先提权。挂命名卷首次初始化会沿用该目录属主。
+RUN mkdir -p data/runtime && chown -R node:node data/runtime
 USER node
 EXPOSE 8600
 CMD ["node", "server.js"]

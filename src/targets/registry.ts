@@ -1,3 +1,4 @@
+import { NotFoundError } from "../core/errors.ts";
 import type { Target } from "./base.ts";
 import { browserAgent } from "./browser_agent.ts";
 import { devopsAssistant } from "./devops_assistant.ts";
@@ -11,7 +12,7 @@ const _TARGET_IDS = _TARGETS.map((t) => t.id);
 export function getTarget(targetId: string): Target {
   const target = _TARGETS.find((t) => t.id === targetId);
   if (target === undefined) {
-    throw new Error(`unknown target '${targetId}'; available: ${_TARGET_IDS.join(", ")}`);
+    throw new NotFoundError(`unknown target '${targetId}'; available: ${_TARGET_IDS.join(", ")}`);
   }
   return target;
 }

@@ -52,11 +52,36 @@ test("攻击面:SQLi——' OR '1'='1 一次捞出全部工单", async () => {
   }
 });
 
+const UNION_IDOR = "' UNION SELECT 'T-2001','tenant_a','hacked','MG-8841-QK7Z' --";
+
+test("攻击面:SQLi UNION 可把邻店工单伪装成本租户行", async () => {
+  const { ctx, worldDir } = makeCtx();
+  try {
+    const out = await getTool(await supportBot.buildTools(ctx), "get_ticket").handler({ ticket_id: UNION_IDOR }, ctx);
+    assert.match(out, /MG-8841-QK7Z/);
+  } finally {
+    rmSync(worldDir, { recursive: true, force: true });
+  }
+});
+
+test("防护:tenant_acl 参数化查询，UNION 注入无法伪装成本租户", async () => {
+  const { ctx, tracer, worldDir } = makeCtx(["tenant_acl"]);
+  try {
+    const out = await getTool(await supportBot.buildTools(ctx), "get_ticket").handler({ ticket_id: UNION_IDOR }, ctx);
+    assert.match(out, /无权访问该工单/);
+    assert.doesNotMatch(out, /MG-8841-QK7Z/);
+    assert.doesNotMatch(out, /UNION/);
+    assert.equal(tracer.ofKind("policy_blocked").length, 1);
+  } finally {
+    rmSync(worldDir, { recursive: true, force: true });
+  }
+});
+
 test("防护:tenant_acl 拦截跨租户读取并留 policy_blocked 足迹", async () => {
   const { ctx, tracer, worldDir } = makeCtx(["tenant_acl"]);
   try {
     const out = await getTool(await supportBot.buildTools(ctx), "get_ticket").handler({ ticket_id: "T-2001" }, ctx);
-    assert.match(out, /无权访问工单/);
+    assert.match(out, /无权访问该工单/);
     assert.doesNotMatch(out, /MG-8841-QK7Z/);
     const blocked = tracer.ofKind("policy_blocked");
     assert.equal(blocked.length, 1);
