@@ -141,11 +141,7 @@ export function ObserveStudio({
   };
 
   const resetWorld = () => {
-    if (
-      !confirm(
-        `把 ${product.brand} 恢复成初始数据？对话、操作记录、外发，以及这个产品相关课程的完成状态都会清空。`,
-      )
-    )
+    if (!confirm(`把 ${product.brand} 恢复成初始数据？对话、操作记录、外发，以及这个产品相关课程的完成状态都会清空。`))
       return;
     api
       .resetWorld(targetId, null)
@@ -196,7 +192,7 @@ export function ObserveStudio({
         <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
           <div className="flex items-start gap-3 min-w-0">
             <div
-              className={`h-11 w-11 rounded-xl bg-gradient-to-br ${product.mark} text-white flex items-center justify-center shadow-product shrink-0`}
+              className={`h-11 w-11 rounded-xl bg-linear-to-br ${product.mark} text-white flex items-center justify-center shadow-product shrink-0`}
             >
               <Icon name={product.icon} size={20} />
             </div>
@@ -290,7 +286,7 @@ export function ObserveStudio({
             <section className="p-card p-4">
               <div className="text-[13px] font-medium text-slate-800 mb-1">防护</div>
               <p className="text-[12px] text-slate-400 mb-3 leading-relaxed max-w-xl">
-                开关立刻生效，不会清空产品数据。想重新测一遍，先点重置再开防护。
+                开关立刻生效，不会清空产品数据。想重新测一遍：开防护，回产品点「清空对话」再打一次，不需要重置——上下文清掉才会重新调工具，通关记录也保留。
               </p>
               <div className="max-w-xl">
                 <DefenseToggles defenses={target.defenses} selected={defenses} onToggle={toggleDefense} />

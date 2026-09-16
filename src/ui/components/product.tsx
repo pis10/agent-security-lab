@@ -51,7 +51,7 @@ export function SearchInput({
     >
       <Icon name="search" size={14} className="text-slate-400" />
       <input
-        className="flex-1 bg-transparent outline-none placeholder:text-slate-400"
+        className="flex-1 bg-transparent outline-hidden placeholder:text-slate-400"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
@@ -119,7 +119,7 @@ export function PBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${PBADGE_CLS[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] font-medium ${PBADGE_CLS[tone]} ${className}`}
     >
       {icon && <Icon name={icon} size={11} />}
       {children}
@@ -178,6 +178,7 @@ export function AiRail({
   accent = "blue",
   messages,
   onSend,
+  onResetChat,
   busy,
   placeholder = "发给助手…",
   suggestions = [],
@@ -189,6 +190,7 @@ export function AiRail({
   accent?: ChatAccent;
   messages: ChatMessage[];
   onSend: (m: string) => void;
+  onResetChat?: () => void;
   busy: boolean;
   placeholder?: string;
   suggestions?: string[];
@@ -199,7 +201,7 @@ export function AiRail({
     <aside className="w-[300px] shrink-0 bg-white border-l border-slate-200 flex flex-col min-h-0">
       <div className="shrink-0 px-3 py-2.5 border-b border-slate-200 flex items-center gap-2">
         <span
-          className={`h-7 w-7 rounded-lg bg-gradient-to-br ${RAIL_MARK[accent]} text-white flex items-center justify-center shadow-product`}
+          className={`h-7 w-7 rounded-lg bg-linear-to-br ${RAIL_MARK[accent]} text-white flex items-center justify-center shadow-product`}
         >
           <Icon name={icon} size={14} />
         </span>
@@ -207,6 +209,17 @@ export function AiRail({
           <div className="text-[13px] font-semibold text-slate-800 truncate">{title}</div>
           {subtitle && <div className="text-[11px] text-slate-400 truncate">{subtitle}</div>}
         </div>
+        {onResetChat && messages.length > 0 && !busy && (
+          <button
+            type="button"
+            onClick={onResetChat}
+            className="h-7 w-7 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center"
+            title="清空对话"
+            aria-label="清空对话"
+          >
+            <Icon name="refresh" size={14} />
+          </button>
+        )}
         {busy && (
           <span className="text-[11px] text-slate-400 flex items-center gap-1">
             <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
@@ -276,9 +289,7 @@ export function AiWidget({
     <div className={`absolute bottom-4 z-30 flex flex-col items-end gap-2 ${className}`}>
       {open ? (
         <div className="w-[340px] h-[420px] bg-white rounded-2xl shadow-pop border border-slate-200 flex flex-col overflow-hidden rise-in">
-          <div
-            className={`shrink-0 px-4 py-3 bg-gradient-to-r ${RAIL_MARK[accent]} text-white flex items-center gap-2`}
-          >
+          <div className={`shrink-0 px-4 py-3 bg-linear-to-r ${RAIL_MARK[accent]} text-white flex items-center gap-2`}>
             <span className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
               <Icon name="bot" size={16} />
             </span>
@@ -337,7 +348,7 @@ export function AiWidget({
         <button
           type="button"
           onClick={() => onOpenChange(true)}
-          className={`relative h-14 w-14 rounded-full bg-gradient-to-br ${RAIL_MARK[accent]} text-white shadow-pop flex items-center justify-center hover:scale-105 transition-transform`}
+          className={`relative h-14 w-14 rounded-full bg-linear-to-br ${RAIL_MARK[accent]} text-white shadow-pop flex items-center justify-center hover:scale-105 transition-transform`}
           title={title}
         >
           <Icon name="message-square" size={22} />

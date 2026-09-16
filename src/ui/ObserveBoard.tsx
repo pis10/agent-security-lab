@@ -82,7 +82,7 @@ export function ObserveBoard({
                 className="w-full p-card p-4 text-left hover:border-slate-300 hover:shadow-product transition-all group flex items-center gap-3"
               >
                 <div
-                  className={`h-10 w-10 rounded-xl bg-gradient-to-br ${product.mark} text-white flex items-center justify-center shadow-product shrink-0`}
+                  className={`h-10 w-10 rounded-xl bg-linear-to-br ${product.mark} text-white flex items-center justify-center shadow-product shrink-0`}
                 >
                   <Icon name={product.icon} size={18} />
                 </div>

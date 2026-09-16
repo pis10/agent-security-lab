@@ -194,7 +194,7 @@ export function Lesson({
             <div className="p-card p-4 space-y-3">
               <div className="flex items-center gap-2.5">
                 <div
-                  className={`h-9 w-9 rounded-lg bg-gradient-to-br ${product.mark} text-white flex items-center justify-center`}
+                  className={`h-9 w-9 rounded-lg bg-linear-to-br ${product.mark} text-white flex items-center justify-center`}
                 >
                   <Icon name={product.icon} size={16} />
                 </div>
@@ -223,9 +223,7 @@ export function Lesson({
                 <Icon name="activity" size={14} />
                 查看操作记录
               </Link>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                先看原理和目标，再进产品打。卡住再展开答案。
-              </p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">先看原理和目标，再进产品打。卡住再展开答案。</p>
             </div>
             <div className="flex flex-wrap gap-1">
               {target.tier_focus.split("/").map((f) => (

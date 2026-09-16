@@ -29,7 +29,6 @@ export function toTargetInfo(t: Target): TargetInfo {
     id: t.id,
     name: t.name,
     tier_focus: t.tierFocus,
-    description: t.description,
     defenses: t.defenses,
   };
 }

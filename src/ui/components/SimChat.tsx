@@ -133,8 +133,8 @@ export function SimChat({
         <input
           className={
             light
-              ? "flex-1 bg-white border border-slate-200 rounded-md px-3 py-1.5 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
-              : "flex-1 bg-base border border-edge rounded-md px-3 py-1.5 text-[13px] outline-none focus:border-info/60 focus:ring-1 focus:ring-info/30 transition"
+              ? "flex-1 bg-white border border-slate-200 rounded-md px-3 py-1.5 text-[13px] text-slate-800 outline-hidden placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition"
+              : "flex-1 bg-base border border-edge rounded-md px-3 py-1.5 text-[13px] outline-hidden focus:border-info/60 focus:ring-1 focus:ring-info/30 transition"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}

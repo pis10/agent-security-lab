@@ -226,7 +226,9 @@ export function Workspace({
             </button>
             {missionOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-64 panel p-3 shadow-pop z-40">
-                <div className="text-[12px] text-slate-300 leading-relaxed">当前课程在顶栏。原理、目标和答案在教学页。</div>
+                <div className="text-[12px] text-slate-300 leading-relaxed">
+                  当前课程在顶栏。原理、目标和答案在教学页。
+                </div>
                 {missionChecks.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {missionChecks.map((c, i) => (
@@ -266,7 +268,12 @@ export function Workspace({
           </Link>
         )}
         <LlmBadge model={meta.llm_model} />
-        <button type="button" onClick={resetWorld} className="chip hover:text-slate-100" title="清空本产品数据与相关课程完成状态">
+        <button
+          type="button"
+          onClick={resetWorld}
+          className="chip hover:text-slate-100"
+          title="清空本产品数据与相关课程完成状态"
+        >
           <Icon name="refresh" size={10} />
           重置
         </button>

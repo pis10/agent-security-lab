@@ -14,7 +14,6 @@ export interface TargetInfo {
   id: string;
   name: string;
   tier_focus: string;
-  description: string;
   defenses: DefenseInfo[];
 }
 

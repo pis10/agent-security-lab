@@ -1,6 +1,27 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* ── 主题（Tailwind v4 CSS-first，替代原 tailwind.config.js）── */
+@theme {
+  /* 深色控制台（红队作战室） */
+  --color-base: #0a0d13;
+  --color-panel: #10151d;
+  --color-elevated: #18202b;
+  --color-edge: #222c3a;
+  --color-dim: #8d99ab;
+  --color-accent: #ff5252;
+  --color-ok: #3fb950;
+  --color-warn: #e3b341;
+  --color-info: #58a6ff;
+  --color-violet: #bc8cff;
+
+  --font-sans:
+    "Inter", "-apple-system", "BlinkMacSystemFont", "PingFang SC", "Helvetica Neue", "Segoe UI", "Microsoft YaHei",
+    "sans-serif";
+  --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", "monospace";
+
+  --shadow-product: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.08);
+  --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
 
 :root {
   color-scheme: light;
@@ -14,26 +35,29 @@ body {
   background: rgba(255, 82, 82, 0.28);
 }
 
-@layer components {
-  .panel {
-    @apply bg-panel border border-edge rounded-lg;
-  }
-  .btn {
-    @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-edge bg-elevated text-sm text-slate-200 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
-  }
-  .btn-primary {
-    @apply btn border-accent/50 text-accent hover:bg-accent/10 hover:border-accent;
-  }
-  .chip {
-    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-edge text-dim;
-  }
-  .chip-light {
-    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-200 text-slate-500 bg-white;
-  }
+/* @utility 才能被其他规则 @apply（v4 不再支持 @apply 组件层自定义类） */
+@utility panel {
+  @apply bg-panel border border-edge rounded-lg;
+}
 
-  .p-card {
-    @apply bg-white border border-slate-200 rounded-lg shadow-product;
-  }
+@utility btn {
+  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-edge bg-elevated text-sm text-slate-200 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+}
+
+@utility btn-primary {
+  @apply btn border-accent/50 text-accent hover:bg-accent/10 hover:border-accent;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono border border-edge text-dim;
+}
+
+@utility chip-light {
+  @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono border border-slate-200 text-slate-500 bg-white;
+}
+
+@utility p-card {
+  @apply bg-white border border-slate-200 rounded-lg shadow-product;
 }
 
 @keyframes blink {

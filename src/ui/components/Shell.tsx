@@ -28,7 +28,7 @@ export function AppNav({ active, compact = false }: { active?: AppSection; compa
             href={item.to}
             className={
               compact
-                ? `px-1.5 py-0.5 rounded ${on ? "text-slate-200 bg-elevated" : "text-dim hover:text-slate-200 hover:bg-elevated"}`
+                ? `px-1.5 py-0.5 rounded-sm ${on ? "text-slate-200 bg-elevated" : "text-dim hover:text-slate-200 hover:bg-elevated"}`
                 : `px-2.5 py-1 rounded-md transition-colors ${on ? "bg-elevated text-slate-100" : "text-dim hover:text-slate-200"}`
             }
           >

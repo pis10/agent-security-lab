@@ -178,7 +178,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 const toolsOf = (s: McpServerSpec): McpToolSpec[] => (Array.isArray(s.tools) ? s.tools : []);
 
-export default function McpMarket({ simState, messages, onSend, onAct, busy }: SimProps) {
+export default function McpMarket({ simState, messages, onSend, onAct, onResetChat, busy }: SimProps) {
   const liveServers: McpServerSpec[] = useMemo(
     () => (Array.isArray(simState.servers) ? (simState.servers as McpServerSpec[]) : []),
     [simState.servers],
@@ -236,7 +236,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, busy }: S
     <div className="h-full flex flex-col bg-slate-100 text-slate-800">
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-product">
+          <div className="h-8 w-8 rounded-lg bg-linear-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-product">
             <Icon name="server" size={16} />
           </div>
           <span className="font-semibold text-[15px] tracking-tight">MCP Hub</span>
@@ -402,7 +402,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, busy }: S
                     {it.tools.slice(0, 3).map((t) => (
                       <code
                         key={t.name}
-                        className="rounded bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600"
+                        className="rounded-sm bg-slate-100 border border-slate-200 px-1.5 py-0.5 text-[10px] font-mono text-slate-600"
                       >
                         {t.name}
                       </code>
@@ -465,7 +465,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, busy }: S
                 ).map(([key, label]) => (
                   <div key={key} className="flex items-center gap-3 text-xs">
                     <span className="w-24 shrink-0 text-slate-400">{label}</span>
-                    <code className="font-mono bg-slate-100 border border-slate-200 rounded px-2 py-0.5 text-indigo-700">
+                    <code className="font-mono bg-slate-100 border border-slate-200 rounded-sm px-2 py-0.5 text-indigo-700">
                       {remote[key] ?? "—"}
                     </code>
                   </div>
@@ -643,6 +643,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, busy }: S
           accent="violet"
           messages={messages}
           onSend={onSend}
+          onResetChat={onResetChat}
           busy={busy}
           placeholder="让助手使用已安装的工具…"
           suggestions={["现在装了哪些工具", "这个市场能干什么"]}

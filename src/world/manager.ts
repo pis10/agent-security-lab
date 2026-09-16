@@ -10,8 +10,8 @@ import { defensesOf, ToolContext, ToolRegistry } from "../core/tools.ts";
 import { Tracer } from "../core/trace.ts";
 import type { Config } from "../lib/config.ts";
 import { llmAvailable, loadConfig } from "../lib/config.ts";
-import { SCENARIOS, requireScenario } from "../scenarios/index.ts";
 import type { ChatMessage, WorldInfo } from "../lib/contracts.ts";
+import { requireScenario, SCENARIOS } from "../scenarios/index.ts";
 import type { Target } from "../targets/base.ts";
 import { getTarget } from "../targets/registry.ts";
 
@@ -32,10 +32,6 @@ interface WorldMeta {
   created?: number;
   defenses?: string[];
   scenario_id?: string | null;
-}
-
-function chatPath(root: string): string {
-  return path.join(root, "chat.json");
 }
 
 function metaPath(root: string): string {
@@ -76,8 +72,6 @@ export function diskSnapshot(targetId: string): WorldInfo | null {
   let messages: ChatMessage[] = [];
   if (existsSync(transcriptPath(root))) {
     messages = projectChat(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
-  } else if (existsSync(chatPath(root))) {
-    messages = JSON.parse(readFileSync(chatPath(root), "utf8")) as ChatMessage[];
   }
   return {
     target_id: targetId,
@@ -214,18 +208,34 @@ export class WorldManager {
     return new Set();
   }
 
+  /**当前绑定的课程：优先内存世界，其次磁盘 meta。 */
+  private _scenarioOf(targetId: string): string | null {
+    const world = this._worlds.get(targetId);
+    if (world) return world.scenarioId;
+    const metaFile = metaPath(path.join(WORLDS_DIR, targetId));
+    if (existsSync(metaFile)) {
+      try {
+        return (JSON.parse(readFileSync(metaFile, "utf8")) as WorldMeta).scenario_id ?? null;
+      } catch {
+        /* meta 读失败当作未绑课 */
+      }
+    }
+    return null;
+  }
+
   async reset(targetId: string, scenarioId: string | null = null): Promise<World> {
-    // 清世界与该产品通关记录，防护开关保留
-    const defenses = await this._lock(async () => {
-      const d = new Set(this._defensesOf(targetId));
+    // 清世界与该产品通关记录；防护开关与课程绑定保留（观测页/产品页重置行为一致）
+    const keep = await this._lock(async () => {
+      const defenses = new Set(this._defensesOf(targetId));
+      const boundScenario = scenarioId ?? this._scenarioOf(targetId);
       await this._teardown(targetId);
-      return d;
+      return { defenses, boundScenario };
     });
     getProgressDb().clearIds(SCENARIOS.filter((s) => s.target === targetId).map((s) => s.id));
-    const world = await this.ensure(targetId, scenarioId);
-    if (defenses.size > 0) {
+    const world = await this.ensure(targetId, keep.boundScenario);
+    if (keep.defenses.size > 0) {
       await this._lock(async () => {
-        world.ctx.state.defenses = defenses;
+        world.ctx.state.defenses = keep.defenses;
         this._saveMeta(world);
       });
     }
@@ -323,10 +333,6 @@ export class WorldManager {
       };
     }
     if (scenarioId !== null) meta.scenario_id = scenarioId;
-    let legacyChat: ChatMessage[] = [];
-    if (existsSync(chatPath(root))) {
-      legacyChat = JSON.parse(readFileSync(chatPath(root), "utf8")) as ChatMessage[];
-    }
 
     const tracer = new Tracer({ sessionId: targetId, path: path.join(root, "trace.jsonl") });
     const ctx = new ToolContext(targetId, tracer, this._config);
@@ -345,11 +351,8 @@ export class WorldManager {
       created: meta.created ?? Date.now() / 1000,
       messages: [],
     };
-    // 有 transcript.json 则恢复；否则用 chat.json 投影接在 system 后
     if (existsSync(transcriptPath(root))) {
       world.agent.restore(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
-    } else if (legacyChat.length > 0) {
-      world.agent.restore([...world.agent.messages.slice(0, 1), ...legacyChat]);
     }
     this._saveMeta(world);
     this._syncChat(world);
@@ -383,7 +386,7 @@ export class WorldManager {
     writeFileSync(metaPath(world.ctx.state.world_dir as string), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   }
 
-  /**从 agent 回放历史投影聊天并写入 transcript.json。hydrate 仍可读旧的 chat.json。 */
+  /**从 agent 回放历史投影聊天并写入 transcript.json。 */
   private _syncChat(world: World): void {
     world.messages = projectChat(world.agent.messages);
     const dir = world.ctx.state.world_dir as string;

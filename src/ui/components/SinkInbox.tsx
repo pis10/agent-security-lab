@@ -21,7 +21,7 @@ export function SinkInbox({ events }: { events: SinkEvent[] }) {
             type="button"
             key={c.id}
             onClick={() => setChannel(c.id)}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition-colors ${
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[11px] transition-colors ${
               channel === c.id ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
             }`}
           >

@@ -148,7 +148,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
     <div className="relative h-full flex flex-col bg-slate-100 text-slate-800">
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-product">
+          <div className="h-8 w-8 rounded-lg bg-linear-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-product">
             <Icon name="store" size={16} />
           </div>
           <span className="font-semibold text-[15px] tracking-tight">橙犀</span>

@@ -27,7 +27,7 @@ function listTime(date?: string): string {
   return time || day;
 }
 
-export default function MailClient({ simState, messages, onSend, onAct, busy }: SimProps) {
+export default function MailClient({ simState, messages, onSend, onAct, onResetChat, busy }: SimProps) {
   const emails: Mail[] = useMemo(
     () => (Array.isArray(simState.emails) ? [...simState.emails].reverse() : []),
     [simState.emails],
@@ -83,7 +83,7 @@ export default function MailClient({ simState, messages, onSend, onAct, busy }: 
     <div className="h-full flex flex-col bg-slate-100 text-slate-800 relative">
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-product">
+          <div className="h-8 w-8 rounded-lg bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-product">
             <Icon name="mail" size={16} />
           </div>
           <span className="font-semibold text-[15px] tracking-tight">NovaMail</span>
@@ -203,7 +203,7 @@ export default function MailClient({ simState, messages, onSend, onAct, busy }: 
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       {e.id === SYSTEM_MAIL_ID && (
-                        <span className="shrink-0 rounded bg-slate-200 text-slate-600 text-[10px] px-1 py-px">
+                        <span className="shrink-0 rounded-sm bg-slate-200 text-slate-600 text-[10px] px-1 py-px">
                           系统
                         </span>
                       )}
@@ -302,6 +302,7 @@ export default function MailClient({ simState, messages, onSend, onAct, busy }: 
           accent="blue"
           messages={messages}
           onSend={onSend}
+          onResetChat={onResetChat}
           busy={busy}
           placeholder="让助手处理邮件、起草回复…"
           suggestions={["这封邮件大概讲什么", "帮我回陈先生那封报价"]}

@@ -117,7 +117,7 @@ function Meter({ value }: { value: number }) {
 const TH = "px-3 py-2.5 font-medium text-left";
 const TD = "px-3 py-2.5";
 
-export default function OpsConsole({ simState, messages, onSend, busy }: SimProps) {
+export default function OpsConsole({ simState, messages, onSend, onResetChat, busy }: SimProps) {
   const files: string[] = useMemo(
     () =>
       Array.isArray(simState.workdir_files)
@@ -221,7 +221,7 @@ export default function OpsConsole({ simState, messages, onSend, busy }: SimProp
     <div className="h-full flex flex-col bg-slate-100 text-slate-800">
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-product">
+          <div className="h-8 w-8 rounded-lg bg-linear-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-product">
             <Icon name="server" size={16} />
           </div>
           <div className="leading-tight">
@@ -716,6 +716,7 @@ export default function OpsConsole({ simState, messages, onSend, busy }: SimProp
           accent="sky"
           messages={messages}
           onSend={onSend}
+          onResetChat={onResetChat}
           busy={busy}
           placeholder="给助手一条运维指令…"
           suggestions={["工作目录里有哪些文件", "读一下今日日报"]}

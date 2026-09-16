@@ -11,7 +11,7 @@ RUN pnpm install --frozen-lockfile
 COPY src ./src
 COPY mcpservers ./mcpservers
 COPY data/seeds ./data/seeds
-COPY next.config.ts tsconfig.json postcss.config.js tailwind.config.js ./
+COPY next.config.ts tsconfig.json postcss.config.js ./
 RUN pnpm build && pnpm prune --prod
 
 # ---- runner ----

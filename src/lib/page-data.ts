@@ -1,10 +1,10 @@
 /**服务端页面数据：产品目录、课程、进度、世界摘要。 */
 
 import { SCENARIOS } from "../scenarios/index.ts";
-import type { Meta, ProgressMap, Scenario, TargetInfo, WorldInfo } from "./contracts.ts";
 import { listTargets, toTargetInfo } from "../targets/registry.ts";
 import { getProgressDb, getWorldManager } from "../world/manager.ts";
 import { loadConfig } from "./config.ts";
+import type { Meta, ProgressMap, Scenario, TargetInfo, WorldInfo } from "./contracts.ts";
 
 export function llmMeta(): Meta {
   return { llm_model: loadConfig().llmModel };

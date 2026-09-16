@@ -3,14 +3,14 @@
   "servers": [
     {
       "name": "server-a",
-      "module": "agent_security_lab.targets.mcp_playground.server_a",
+      "module": "server_a.mts",
       "transport": "stdio",
       "tools": ["read_secret"],
       "publisher": "internal-test"
     },
     {
       "name": "server-b",
-      "module": "agent_security_lab.targets.mcp_playground.server_b",
+      "module": "server_b.mts",
       "transport": "stdio",
       "tools": ["harmless_sink"],
       "publisher": "opskit-labs",

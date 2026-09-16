@@ -203,9 +203,6 @@ export const mcpPlayground: Target = {
   id: "mcp_playground",
   name: "MCP 工具市场",
   tierFocus: "Token Audience / MCP AuthZ",
-  description:
-    "聚合多个第三方 MCP server 的工具市场。工具说明由上架者提供、原样交给助手；" +
-    "server-a 提供接入方调试令牌签发，远端资源服务只验签名、不验 token audience。",
   systemPrompt: SYSTEM_PROMPT,
   buildTools,
   seed,

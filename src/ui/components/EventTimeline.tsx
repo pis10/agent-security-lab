@@ -130,7 +130,7 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
                 <div className="min-w-0 flex-1 pb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <span
-                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[11px] ${meta.chip}`}
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm border text-[11px] ${meta.chip}`}
                     >
                       <Icon name={meta.icon} size={11} />
                       {meta.label}

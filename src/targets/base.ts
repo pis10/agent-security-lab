@@ -12,7 +12,6 @@ export interface Target {
   id: string;
   name: string;
   tierFocus: string; // 该靶标演练的攻击面
-  description: string;
   systemPrompt: string;
   buildTools: (ctx: ToolContext) => Tool[] | Promise<Tool[]>;
   seed?: (ctx: ToolContext) => void | Promise<void>;

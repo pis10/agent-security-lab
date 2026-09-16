@@ -1,5 +1,5 @@
-import { SCENARIOS } from "@/scenarios/index.ts";
 import { handleRoute } from "@/lib/http.ts";
+import { SCENARIOS } from "@/scenarios/index.ts";
 import { getWorldManager } from "@/world/manager.ts";
 import { evaluateScenario } from "@/world/observations.ts";
 
