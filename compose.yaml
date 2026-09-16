@@ -1,7 +1,5 @@
-# 一键起跑：cp .env.example .env（填 GLM API Key）→ docker compose up -d --build
-# 端口只发布到回环地址；世界与通关进度持久化在 asl-data 卷，重建容器不丢。
-# 安全边界（靶场故意保留真实命令注入）：非 root + 只读根文件系统 + 全部 capabilities
-# 丢弃 + no-new-privileges，容器内唯一可写路径是 data/runtime（卷）与 /tmp（tmpfs）。
+# cp .env.example .env → docker compose up -d --build
+# 端口 127.0.0.1:8600；进度在 asl-data 卷。
 services:
   asl:
     build: .

@@ -1,4 +1,4 @@
-/**领域层类型化错误：Route 层据此映射 HTTP 状态，不再靠错误消息字符串前缀猜。 */
+/**领域错误，路由层映射成 HTTP 状态。 */
 
 export class NotFoundError extends Error {}
 

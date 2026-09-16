@@ -32,7 +32,7 @@ export function CaptureToast({
               href={`/learn/${first.scenario_id}`}
               className="inline-flex items-center rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] px-2.5 py-1"
             >
-              查看课程解析
+              打开课程
             </Link>
             {targetId && (
               <Link

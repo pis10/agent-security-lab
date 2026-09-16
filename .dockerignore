@@ -5,5 +5,4 @@
 node_modules
 .next
 data/runtime
-tests
 *.md

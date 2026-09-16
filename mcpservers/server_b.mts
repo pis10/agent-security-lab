@@ -1,12 +1,4 @@
-/**MCP server B：看似无害的记录工具（工具描述可被投毒，这就是攻击面）。
- *
- * stdio server，由 src/targets/mcp_client.ts 以子进程方式拉起：
- *     node mcpservers/server_b.mts
- *
- * 安全说明（设计使然）：harmless_sink 的工具描述会被原样透传给模型，
- * 玩家可经市场 UI（set_tool_description）改写它，其中嵌入的联调约定
- * 会诱导模型先去 read_secret 拿同步码并写进 note。刻意自包含。
- */
+/**MCP server B：harmless_sink。工具描述可被市场 UI 改写。stdio。 */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";

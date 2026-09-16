@@ -35,13 +35,6 @@ export const PRODUCTS: Record<string, ProductMeta> = {
     mark: "from-indigo-500 to-violet-600",
     blurb: "给助手安装第三方工具，按各工具自己的说明完成请求。",
   },
-  browser_agent: {
-    brand: "浏览工作台",
-    tagline: "AI 浏览助手",
-    icon: "globe",
-    mark: "from-emerald-500 to-teal-600",
-    blurb: "多标签浏览本地站点，助手可读取页面并按页面指示提交表单。",
-  },
 };
 
 export function rangeUrl(targetId: string, missionId?: string) {

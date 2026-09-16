@@ -1,9 +1,4 @@
-/**OpenAI-compatible chat client（默认：GLM Coding Plan / glm-5.3-flash），原生 fetch 实现。
- *
- * GLM reasoning 模型会返回 `reasoning_content`，且可能伴随 tool_calls 出现空
- * content——两者都在这里处理。`max_tokens` 给得宽裕，以防开启 thinking。
- * 远端挂住时 120s 快速失败、单次重试；不引 SDK。
- */
+/**OpenAI 兼容 chat（默认 GLM glm-5.3-flash）。处理 reasoning_content；超时 120s，可重试一次。 */
 import type { Config } from "../lib/config.ts";
 
 export interface ToolCall {
@@ -18,10 +13,6 @@ export interface LLMResponse {
   content: string | null;
   toolCalls: ToolCall[];
   reasoning: string | null;
-}
-
-export interface LLM {
-  chat(messages: unknown[], tools?: unknown[]): Promise<LLMResponse>;
 }
 
 interface WireToolCall {
@@ -39,8 +30,7 @@ interface ChatCompletionResponse {
   choices?: { message?: WireMessage }[];
 }
 
-/**把 OpenAI-compatible 响应解析为 LLMResponse（独立成函数便于测试）。 */
-export function parseChatResponse(data: ChatCompletionResponse): LLMResponse {
+function parseChatResponse(data: ChatCompletionResponse): LLMResponse {
   const msg = data.choices?.[0]?.message ?? {};
   const toolCalls: ToolCall[] = [];
   for (const tc of msg.tool_calls ?? []) {
@@ -67,7 +57,7 @@ export function parseChatResponse(data: ChatCompletionResponse): LLMResponse {
 
 const RETRYABLE_STATUS = new Set([408, 429]);
 
-export class LLMClient implements LLM {
+export class LLMClient {
   private _baseUrl: string;
   private _apiKey: string;
   private _model: string;
@@ -96,7 +86,6 @@ export class LLMClient implements LLM {
       body.tool_choice = "auto";
     }
     if (this._thinking) {
-      // GLM 思考模式；留空则不发送（用于不认识该字段的端点）
       body.thinking = { type: this._thinking };
     }
 
@@ -113,32 +102,26 @@ export class LLMClient implements LLM {
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(120_000),
         });
-      } catch (exc) {
-        if (exc instanceof Error && exc.name === "TimeoutError") {
+      } catch (err) {
+        if (err instanceof Error && err.name === "TimeoutError") {
           throw new Error(
             `LLM 请求超时（${this._model}）：端点无响应。可稍后重试；若持续超时，` +
               "检查 ASL_LLM_BASE_URL 是否为订阅对应的端点。",
           );
         }
-        // 网络层异常（连接拒绝/重置等）：重试一次
-        lastError = exc;
+        lastError = err;
         if (attempt === 1) break;
         continue;
       }
       if (!resp.ok) {
         const text = await resp.text();
         if (attempt === 0 && (resp.status >= 500 || RETRYABLE_STATUS.has(resp.status))) {
-          continue; // 5xx/限流：重试一次
+          continue;
         }
-        // 4xx（鉴权/请求不合法等）重试没有意义，立即失败
         throw new Error(`LLM ${resp.status}: ${text.slice(0, 300)}`);
       }
       return parseChatResponse((await resp.json()) as ChatCompletionResponse);
     }
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
-}
-
-export function buildLlm(config: Config): LLM {
-  return new LLMClient(config);
 }

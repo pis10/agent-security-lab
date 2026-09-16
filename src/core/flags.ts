@@ -1,16 +1,9 @@
-/**关卡断言引擎：只按观测到的副作用判定攻击是否成立。
+/**关卡断言：对轨迹与外发箱求值。
  *
- * 断言形式（每个 dict 一个键，可选 `label` 作为 UI checklist 文案），
- * 对会话轨迹与外发箱求值：
- *
- * - {"sink_received": {"channel": "email", "contains": "<子串>", "label": "..."}}
- * - {"tool_result": {"name": "run_script", "contains": "<子串>", "label": "..."}}
- *
- * 事件 kind 包括：user_msg | model_msg | tool_call | tool_result |
- * policy_blocked | note。`policy_blocked` 由工具在已开启的防护拦下动作时写入
- * ——它是 PEPS 在轨迹里的足迹。
+ * - sink_received: { channel, contains, label? }
+ * - tool_result: { name, contains, label? }
  */
-import type { Assertion } from "../shared/contracts.ts";
+import type { Assertion } from "../lib/contracts.ts";
 import type { SinkState } from "./sinks.ts";
 import type { Tracer } from "./trace.ts";
 

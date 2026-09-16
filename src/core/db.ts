@@ -1,9 +1,4 @@
-/**SQLite 数据层（node:sqlite，stdlib only）。
- *
- * - 全局进度库 data/runtime/progress.db：跨重启的通关记录。
- * - 产品世界 data/runtime/worlds/<target_id>/：持久化的靶场状态。
- * 每次调用新开连接再关闭——简单直接，且避免长连接跨请求持有。
- */
+/**SQLite：进度库 progress.db，产品世界在 worlds/<target_id>/。每次短连接。 */
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -13,8 +8,8 @@ import type { ToolContext } from "./tools.ts";
 export const RUNTIME_DIR = path.join(PROJECT_ROOT, "data", "runtime");
 export const WORLDS_DIR = path.join(RUNTIME_DIR, "worlds");
 
+/**本次运行的业务文件目录。靶场 UI 会设置 `ctx.state.world_dir`。 */
 export function worldPath(ctx: ToolContext): string {
-  /**本次运行的业务文件目录。靶场 UI 会设置 state['world_dir']。 */
   const custom = ctx.state.world_dir;
   const p = typeof custom === "string" && custom ? custom : path.join(RUNTIME_DIR, ctx.sessionId);
   mkdirSync(p, { recursive: true });
@@ -41,8 +36,8 @@ export class ProgressDB {
     this._ensureSchema();
   }
 
+  /**db 文件缺失时建表。 */
   private _ensureSchema(): void {
-    /**幂等——db 文件在运行中被删掉也能自愈。 */
     const db = connect(this._path);
     try {
       db.exec(`
@@ -101,6 +96,16 @@ export class ProgressDB {
     try {
       const stmt = db.prepare("DELETE FROM captures WHERE scenario_id = ?");
       for (const sid of scenarioIds) stmt.run(sid);
+    } finally {
+      db.close();
+    }
+  }
+
+  clearAll(): void {
+    this._ensureSchema();
+    const db = connect(this._path);
+    try {
+      db.exec("DELETE FROM captures");
     } finally {
       db.close();
     }

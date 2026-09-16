@@ -1,9 +1,4 @@
-/**MCP stdio 客户端：管理一个 server 子进程的完整生命周期。
- *
- * start() -> listTools() / callTool() -> close()。
- * close() 会确认 server 子进程已退出、无残留——靶场把"MCP 不泄漏进程"
- * 当作硬性验收。
- */
+/**MCP stdio 客户端。close() 等待子进程退出。 */
 import { exec } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -32,10 +27,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-/**当前进程的直接子进程 {pid: command}。
- *
- * Linux（含 node:xx-slim 容器，镜像里没有 procps）读 /proc；macOS 开发机回退 ps。
- */
+/**当前进程的直接子进程。容器里读 /proc。 */
 function childProcesses(): Promise<Map<number, string>> {
   if (existsSync("/proc")) {
     const children = new Map<number, string>();
@@ -95,13 +87,13 @@ export class McpStdioClient {
         this._timeoutMs,
         `MCP server did not start in time: ${this._module}`,
       );
-    } catch (exc) {
+    } catch (err) {
       try {
         await client.close();
       } catch {
         /* already dead */
       }
-      throw exc;
+      throw err;
     }
     this._client = client;
   }
@@ -138,8 +130,8 @@ export class McpStdioClient {
     await this._confirmExited();
   }
 
+  /**确认子进程已退出；5 秒内仍在则抛错。 */
   private async _confirmExited(): Promise<void> {
-    /**确认 transport 子进程已退出；5 秒内仍在则抛错（泄漏是缺陷，不是警告）。 */
     const deadline = Date.now() + 5000;
     for (;;) {
       const children = await childProcesses();
@@ -153,7 +145,7 @@ export class McpStdioClient {
   }
 }
 
-/**server 脚本路径：dev 与 standalone 都从工作目录的 mcpservers/ 取。 */
+/**mcpservers/<module>，相对工作目录。 */
 function serverPathOf(module: string): string {
   return path.join(process.cwd(), "mcpservers", module);
 }

@@ -4,9 +4,7 @@ import { Icon } from "../components/Icon";
 import { AiRail, Avatar, PBadge, SearchInput } from "../components/product";
 import type { SimProps } from "../types";
 
-/** NovaMail 仿真邮件客户端（靶标 mail_agent 的受害者视角）。
- * 浅色 SaaS 邮件界面：文件夹 / 邮件列表 / 阅读窗 / 右侧助手栏。
- * 外部来信经「写邮件」放入收件箱；触发助手仍走 onSend。 */
+/**NovaMail 仿真客户端。 */
 
 interface Mail {
   id: number;
@@ -16,7 +14,7 @@ interface Mail {
   date?: string;
 }
 
-/** id=3 的官方同步通知渲染成系统邮件样式 */
+/**官方同步通知（id=3）。 */
 const SYSTEM_MAIL_ID = 3;
 
 const senderName = (from: string) => from.split("@")[0] || from;
@@ -37,7 +35,7 @@ export default function MailClient({ simState, messages, onSend, onAct, busy }: 
   const memory: string[] = Array.isArray(simState.memory) ? simState.memory : [];
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // 装饰性已读/星标状态:仅前端,点击后标记已读
+  // 已读/星标仅前端
   const [readIds, setReadIds] = useState<ReadonlySet<number>>(new Set([1]));
   const [starIds, setStarIds] = useState<ReadonlySet<number>>(new Set());
   const [folder, setFolder] = useState<"inbox" | "starred">("inbox");

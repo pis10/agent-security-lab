@@ -3,7 +3,7 @@ import { evaluate } from "../core/flags.ts";
 import { SINKS } from "../core/sinks.ts";
 import { defensesOf } from "../core/tools.ts";
 import type { Scenario } from "../scenarios/types.ts";
-import { assertionLabel, type Observation, type ObservationCheck } from "../shared/contracts.ts";
+import { assertionLabel, type Observation, type ObservationCheck } from "../lib/contracts.ts";
 import type { World } from "./manager.ts";
 import { getProgressDb } from "./manager.ts";
 

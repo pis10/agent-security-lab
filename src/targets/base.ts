@@ -1,13 +1,7 @@
-/**靶标契约：一个"故意脆弱"的 agent 应用。
- *
- * Target 捆绑系统提示词、工具集、种子/生命周期钩子与可选的产品 UI 状态。
- * 靶场 UI 为每个靶标保留一个持久世界（data/runtime/worlds/<id>/）；
- * seed() 在文件已存在时只挂载、缺失时才从种子复制。
- */
+/**靶标：系统提示词、工具、种子和可选的产品 UI 状态。 */
 import type { Tool, ToolContext } from "../core/tools.ts";
 
-/**一项可开关的加固措施。工具在 `ctx.state["defenses"]` 中检查它，
- * 拦下动作时必须记录 `policy_blocked` 轨迹事件。 */
+/**可开关的加固。工具在 `ctx.state.defenses` 里检查，拦下时记 policy_blocked。 */
 export interface Defense {
   id: string;
   name: string;

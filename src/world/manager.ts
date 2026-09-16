@@ -1,23 +1,17 @@
-/**靶场 UI 的持久产品世界。
- *
- * 每个靶标一个目录：data/runtime/worlds/<target_id>/，跨进程重启留存；
- * 重置删除该目录并从 data/seeds/ 重新播种。磁盘是 source of truth，
- * 内存世界只是当前进程的 live 实例——globalThis 守卫只用于开发期 HMR
- * 不重建单例，任何业务正确性都不依赖它。
- */
+/**持久产品世界：每个靶标一个目录 data/runtime/worlds/<target_id>/，磁盘为准。 */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { Agent, type ReplayMessage } from "../core/agent.ts";
 import { ProgressDB, WORLDS_DIR } from "../core/db.ts";
 import { BadRequestError } from "../core/errors.ts";
-import { buildLlm } from "../core/llm.ts";
+import { LLMClient } from "../core/llm.ts";
 import { SINKS } from "../core/sinks.ts";
 import { defensesOf, ToolContext, ToolRegistry } from "../core/tools.ts";
 import { Tracer } from "../core/trace.ts";
 import type { Config } from "../lib/config.ts";
 import { llmAvailable, loadConfig } from "../lib/config.ts";
-import { requireScenario } from "../scenarios/index.ts";
-import type { ChatMessage, WorldInfo } from "../shared/contracts.ts";
+import { SCENARIOS, requireScenario } from "../scenarios/index.ts";
+import type { ChatMessage, WorldInfo } from "../lib/contracts.ts";
 import type { Target } from "../targets/base.ts";
 import { getTarget } from "../targets/registry.ts";
 
@@ -29,7 +23,7 @@ export interface World {
   tracer: Tracer;
   scenarioId: string | null;
   created: number;
-  /**UI 聊天投影：由 agent 的完整回放历史派生，不是独立状态。 */
+  /**聊天框内容，从 agent 回放历史投影。 */
   messages: ChatMessage[];
 }
 
@@ -52,8 +46,7 @@ function transcriptPath(root: string): string {
   return path.join(root, "transcript.json");
 }
 
-/**UI 聊天是完整回放历史的投影：只留有正文的 user/assistant 消息
- * （工具中转的空 content assistant 消息、tool 消息、system 都不进聊天框）。 */
+/**有正文的 user/assistant 消息；system、tool、空 assistant 不进聊天框。 */
 function projectChat(messages: ReplayMessage[]): ChatMessage[] {
   const out: ChatMessage[] = [];
   for (const m of messages) {
@@ -118,7 +111,7 @@ export class WorldManager {
     this._config = config;
   }
 
-  /**串行化结构性变更（hydrate/teardown/防护写入）。Node 单线程，但 await 间会交错。 */
+  /**串行化 hydrate / teardown / 防护写入。 */
   private _lock<T>(fn: () => Promise<T>): Promise<T> {
     const run = this._queue.then(fn, fn);
     this._queue = run.catch(() => {});
@@ -148,7 +141,6 @@ export class WorldManager {
   }
 
   async ensure(targetId: string, scenarioId: string | null = null): Promise<World> {
-    // 领域不变量在入口一次校验：场景必须存在且属于这个靶标
     if (scenarioId !== null) {
       requireScenario(scenarioId, targetId);
     }
@@ -161,9 +153,7 @@ export class WorldManager {
         world = await this._hydrate(targetId, scenarioId);
         this._worlds.set(targetId, world);
       } else if (scenarioId !== null && scenarioId !== world.scenarioId) {
-        // 换课必须重置：断言按 target 维度查询 sink/trace，上一课留下的
-        // 外发记录和投毒数据会污染这一课的判定。防护是玩家策略设置，
-        // 跨重置保留（否则「开好防护再进课程」会被静默清掉）。
+        // 换课：重建世界，防护开关保留
         const defenses = [...defensesOf(world.ctx)].sort();
         await this._teardown(targetId);
         world = await this._hydrate(targetId, scenarioId);
@@ -197,9 +187,8 @@ export class WorldManager {
       this._worlds.delete(targetId);
       try {
         await world.target.onSessionEnd?.(world.ctx);
-      } catch (exc) {
-        // 收尾钩子失败不阻断清理（例如 MCP 泄漏校验抛错），但要看得见
-        console.error(`world ${targetId} onSessionEnd failed`, exc);
+      } catch (err) {
+        console.error(`world ${targetId} onSessionEnd failed`, err);
       }
       world.tracer.close();
     }
@@ -209,8 +198,8 @@ export class WorldManager {
     if (existsSync(root)) rmSync(root, { recursive: true, force: true });
   }
 
+  /**当前生效的防护集合：优先内存世界，其次磁盘 meta。 */
   private _defensesOf(targetId: string): Set<string> {
-    /**当前生效的防护集合：优先内存世界，其次磁盘 meta。 */
     const world = this._worlds.get(targetId);
     if (world) return new Set(defensesOf(world.ctx));
     const metaFile = metaPath(path.join(WORLDS_DIR, targetId));
@@ -219,20 +208,20 @@ export class WorldManager {
         const meta = JSON.parse(readFileSync(metaFile, "utf8")) as WorldMeta;
         return new Set(meta.defenses ?? []);
       } catch {
-        // meta 不可读时按空防护处理
+        /* meta 读失败当作无防护 */
       }
     }
     return new Set();
   }
 
   async reset(targetId: string, scenarioId: string | null = null): Promise<World> {
-    // 重置清投毒数据/痕迹，但保留防护开关（玩家策略层）：
-    // 「开防护 → 重置 → 复测」是教学闭环的标准动作，防护丢失会打断它。
+    // 清世界与该产品通关记录，防护开关保留
     const defenses = await this._lock(async () => {
       const d = new Set(this._defensesOf(targetId));
       await this._teardown(targetId);
       return d;
     });
+    getProgressDb().clearIds(SCENARIOS.filter((s) => s.target === targetId).map((s) => s.id));
     const world = await this.ensure(targetId, scenarioId);
     if (defenses.size > 0) {
       await this._lock(async () => {
@@ -243,15 +232,24 @@ export class WorldManager {
     return world;
   }
 
+  /**全部产品世界 + 通关进度清掉，回到刚打开靶场。 */
+  async resetAll(): Promise<void> {
+    const ids = [...new Set(this.list().map((w) => w.target_id))];
+    for (const id of ids) {
+      await this._lock(async () => {
+        await this._teardown(id);
+      });
+    }
+    getProgressDb().clearAll();
+  }
+
   async chat(targetId: string, message: string): Promise<string> {
     const world = await this.ensure(targetId);
     let reply: string;
     try {
       reply = await world.agent.run(message, world.ctx);
-    } catch (exc) {
-      // 中断的轮次也要收口：错误回复作为一条助手消息写入回放历史，
-      // UI 投影与模型上下文才不会分叉，页面回来也不会有永远没回复的消息。
-      console.error(`world ${targetId} chat turn interrupted`, exc);
+    } catch (err) {
+      console.error(`world ${targetId} chat turn interrupted`, err);
       reply = "[error] 这一轮助手没有跑完（目标侧中断）。可以重发一次，或到观测页查看这轮已发生的调用。";
       world.agent.noteAssistant(reply);
     }
@@ -259,8 +257,8 @@ export class WorldManager {
     return reply;
   }
 
+  /**丢弃当前对话并整体重建 agent（不带历史）。工单、轨迹、外发与防护保留。 */
   async clearChat(targetId: string): Promise<World> {
-    /**丢弃当前对话并整体重建 agent（不带历史）。工单、轨迹、外发与防护保留。 */
     const world = await this.ensure(targetId);
     return this._lock(async () => {
       world.agent = await this._makeAgent(world.target, world.ctx, world.tracer);
@@ -301,8 +299,8 @@ export class WorldManager {
       try {
         await world.target.onSessionEnd?.(world.ctx);
         world.tracer.close();
-      } catch (exc) {
-        console.warn(`world ${world.targetId} shutdown failed`, exc);
+      } catch (err) {
+        console.warn(`world ${world.targetId} shutdown failed`, err);
       }
     }
   }
@@ -347,8 +345,7 @@ export class WorldManager {
       created: meta.created ?? Date.now() / 1000,
       messages: [],
     };
-    // 恢复完整回放历史（transcript.json 为准）；旧世界只有 chat.json 投影，
-    // 退回用「system + 投影」重建，模型上下文与 UI 至少不丢对话内容。
+    // 有 transcript.json 则恢复；否则用 chat.json 投影接在 system 后
     if (existsSync(transcriptPath(root))) {
       world.agent.restore(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
     } else if (legacyChat.length > 0) {
@@ -361,7 +358,7 @@ export class WorldManager {
 
   private async _makeAgent(target: Target, ctx: ToolContext, tracer: Tracer): Promise<Agent> {
     return new Agent(
-      buildLlm(this._config),
+      new LLMClient(this._config),
       new ToolRegistry(await target.buildTools(ctx)),
       target.systemPrompt,
       tracer,
@@ -369,8 +366,7 @@ export class WorldManager {
   }
 
   private async _rebuildAgent(world: World): Promise<void> {
-    // 重建只换 system 位 / 工具描述（MCP 投毒后），对话上下文原样保留。
-    // 必须立刻落盘：否则进程重启会从旧 transcript 把 system 位盖回去。
+    // 换 system 位与工具描述，对话上下文保留，立刻落盘
     const rest = world.agent.messages.slice(1);
     world.agent = await this._makeAgent(world.target, world.ctx, world.tracer);
     world.agent.restore([...world.agent.messages.slice(0, 1), ...rest]);
@@ -387,11 +383,10 @@ export class WorldManager {
     writeFileSync(metaPath(world.ctx.state.world_dir as string), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   }
 
-  /**聊天投影与持久化都从唯一正典（agent 回放历史）派生并落盘。 */
+  /**从 agent 回放历史投影聊天并写入 transcript.json。hydrate 仍可读旧的 chat.json。 */
   private _syncChat(world: World): void {
     world.messages = projectChat(world.agent.messages);
     const dir = world.ctx.state.world_dir as string;
-    writeFileSync(chatPath(dir), `${JSON.stringify(world.messages, null, 2)}\n`, "utf8");
     writeFileSync(transcriptPath(dir), `${JSON.stringify(world.agent.messages, null, 2)}\n`, "utf8");
   }
 
@@ -412,7 +407,7 @@ function ctxFlag(ctx: ToolContext, key: string): boolean {
   return ctx.state[key] === true;
 }
 
-/**dev 热重载下的进程级单例（磁盘才是真正的 source of truth）。 */
+/**进程内单例。 */
 export function getWorldManager(): WorldManager {
   const g = globalThis as { __aslWorldManager?: WorldManager };
   if (!g.__aslWorldManager) {

@@ -1,4 +1,4 @@
-import type { Meta, Observation, ProgressMap, Scenario, SinkEvent, TargetInfo, TraceEvent, WorldInfo } from "./types";
+import type { Observation, ProgressMap, SinkEvent, TraceEvent, WorldInfo } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -39,9 +39,6 @@ export function onProgressChanged(handler: () => void) {
 }
 
 export const api = {
-  meta: () => req<Meta>("/api/meta"),
-  targets: () => req<TargetInfo[]>("/api/targets"),
-  scenarios: () => req<Scenario[]>("/api/scenarios"),
   progress: () => req<ProgressMap>("/api/progress"),
   listWorlds: () => req<WorldInfo[]>("/api/worlds"),
   ensureWorld: (targetId: string, scenarioId: string | null) =>
@@ -62,7 +59,7 @@ export const api = {
     }),
   clearChat: (targetId: string) => req<WorldInfo>(`/api/worlds/${targetId}/chat/reset`, { method: "POST" }),
   trace: (targetId: string) => req<TraceEvent[]>(`/api/worlds/${targetId}/trace`),
-  sim: (targetId: string) => req<Record<string, any>>(`/api/worlds/${targetId}/sim`),
+  sim: (targetId: string) => req<Record<string, unknown>>(`/api/worlds/${targetId}/sim`),
   sink: (targetId: string) => req<SinkEvent[]>(`/api/worlds/${targetId}/sink`),
   observations: (targetId: string) =>
     req<{ target_id: string; observations: Observation[] }>(`/api/worlds/${targetId}/observations`),
@@ -79,6 +76,9 @@ export const api = {
       notifyProgressChanged();
       return world;
     }),
-  reportUrl: (targetId: string, scenarioId: string) =>
-    `/api/worlds/${targetId}/report?scenario_id=${encodeURIComponent(scenarioId)}`,
+  resetAll: () =>
+    req<{ ok: true }>("/api/reset", { method: "POST" }).then((body) => {
+      notifyProgressChanged();
+      return body;
+    }),
 };

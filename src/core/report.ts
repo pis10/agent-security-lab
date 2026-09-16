@@ -1,5 +1,5 @@
 /**Finding 报告生成：场景 + 轨迹证据（Markdown）。 */
-import type { Assertion } from "../shared/contracts.ts";
+import type { Assertion } from "../lib/contracts.ts";
 import type { SinkEvent } from "./sinks.ts";
 import type { TraceEvent } from "./trace.ts";
 
@@ -8,8 +8,9 @@ interface ReportScenario {
   target: string;
   tier: string;
   title: string;
-  brief: string;
-  writeup: string;
+  principle: string;
+  goal: string;
+  solution: string;
   assertions: Assertion[];
 }
 
@@ -81,9 +82,13 @@ Agent/靶标 \`${scenario.target}\`(本地靶场,全部 dummy 数据)。
 
 本地会话;无需用户交互(攻击者扮演用户/外部内容);输入面见攻击链第 1 步。
 
-## 攻击任务
+## 原理
 
-${scenario.brief.trim()}
+${scenario.principle.trim()}
+
+## 目标
+
+${scenario.goal.trim()}
 
 ## 攻击链(trace 证据顺序)
 
@@ -97,11 +102,11 @@ ${evidenceLines.join("\n")}
 ${blockedSection}
 ## 影响
 
-依据场景断言判定成立;机密性/完整性影响详见下方攻击解析。
+依据场景断言判定成立。
 
-## 攻击解析与根因
+## 答案
 
-${scenario.writeup.trim() || "（本关暂未编写解析）"}
+${scenario.solution.trim()}
 
 ## 复测标准
 

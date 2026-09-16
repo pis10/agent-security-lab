@@ -1,23 +1,12 @@
-/**本机外发箱（sink inbox）与假内网端点的共享状态。
- *
- * sink 记录"真实攻击里会发出去的东西"。internal 路由扮演内网/云元数据。
- * 仅本地绑定；载荷均为 TEST_* 假数据。HTTP 路由在 app/sink 与 app/internal 下。
- */
+/**外发箱与假内网的共享状态。路由在 src/app/sink、src/app/internal。 */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { SinkEvent } from "../lib/contracts.ts";
 
-export interface SinkEvent {
-  ts: number;
-  session_id: string;
-  channel: string; // email | http | internal
-  payload: Record<string, unknown>;
-}
+export type { SinkEvent };
 
 export class SinkState {
-  /**内存里记录所有打到外发箱的内容。
-   *
-   * 靶场世界挂上 JSONL 路径后，战利品跨进程重启留存。
-   */
+  /**内存中的外发记录；挂上 JSONL 后跨重启留存。 */
   events: SinkEvent[] = [];
   private _logs = new Map<string, string>();
 
@@ -61,10 +50,6 @@ export class SinkState {
       events = events.filter((e) => e.session_id === opts.sessionId);
     }
     return events;
-  }
-
-  reset(): void {
-    this.events = [];
   }
 
   purgeSession(sessionId: string): void {

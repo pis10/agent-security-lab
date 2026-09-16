@@ -1,9 +1,5 @@
-# Multi-stage build：builder 用完整依赖跑 next build；runner 带 standalone 产物
-# 加 prune 后的生产 node_modules（mcpservers/*.mts 是独立 node 子进程，
-# 需要真实解析 @modelcontextprotocol/sdk 及其依赖树，不赌 standalone tracing）。
-# 靶场故意保留真实命令执行（shell 注入面），容器是安全边界：
-# runner 以非 root 运行，仅 data/runtime 可写。
-# 发布到宿主时建议 -p 127.0.0.1:8600:8600，不要暴露公网。
+# Debian Bookworm（node:24-slim）。standalone + 生产 node_modules（mcpservers 子进程用）。
+# 以 node 用户跑；可写目录 data/runtime。
 
 # ---- builder ----
 FROM node:24-slim AS builder
@@ -12,7 +8,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY app ./app
 COPY src ./src
 COPY mcpservers ./mcpservers
 COPY data/seeds ./data/seeds
@@ -31,9 +26,6 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/mcpservers ./mcpservers
 COPY --from=builder /app/data/seeds ./data/seeds
-# 只把可写的运行时目录交给 node 用户；应用文件（server、MCP scripts、seeds、
-# node_modules）保持 root 属主、对 node 只读——shell 注入拿到的是 r-x 的文件系统，
-# 想篡改运行中的应用代码必须先提权。挂命名卷首次初始化会沿用该目录属主。
 RUN mkdir -p data/runtime && chown -R node:node data/runtime
 USER node
 EXPOSE 8600

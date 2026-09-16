@@ -4,11 +4,7 @@ import { Icon } from "../components/Icon";
 import { AiRail, Avatar, EmptyState, PBadge, PButton, SearchInput, Stat } from "../components/product";
 import type { SimProps } from "../types";
 
-/** MCP Hub 仿真工具市场（靶标 mcp_playground 的受害者视角）。
- * 浅色 SaaS 市场：左栏视图/分类导航 + server 卡片网格 + 右侧 Host 助手栏 / 详情抽屉。
- * simState 只提供 Host 实际装载的 server（name + tools 描述全文）与 remote 端点元信息；
- * 发布者、版本、下载量等市场资料为前端静态富化，与 data/seeds/mcp_playground/marketplace.json 一致。
- * 攻击面即工具描述：抽屉里 whitespace-pre-wrap 全文渲染、绝不截断，投毒指令玩家可完整读到。 */
+/**MCP Hub 仿真市场。工具描述全文渲染。 */
 
 interface McpToolSpec {
   name: string;
@@ -20,7 +16,7 @@ interface McpServerSpec {
   tools: McpToolSpec[];
 }
 
-/** 市场展示资料（静态富化；live server 只有 name/tools 来自后端） */
+/**市场卡片资料。 */
 interface ServerMeta {
   publisher: string;
   publisherLabel: string;
@@ -39,10 +35,10 @@ interface MarketItem extends ServerMeta {
   name: string;
   transport: string;
   tools: McpToolSpec[];
-  live: boolean; // true = Host 启动时实际装载（来自 simState.servers）
+  live: boolean;
 }
 
-/** 与 marketplace.json 中两条已装载条目一一对应 */
+/**已装载 server 的市场资料。 */
 const META: Record<string, ServerMeta> = {
   server_a: {
     publisher: "internal-test",
@@ -72,7 +68,7 @@ const META: Record<string, ServerMeta> = {
   },
 };
 
-/** 市场上架但本地未装载的条目（纯展示目录，与 marketplace.json 新增条目一致） */
+/**未装载的目录条目。 */
 const CATALOG: MarketItem[] = [
   {
     name: "calendar-tools",
@@ -154,7 +150,7 @@ const CATALOG: MarketItem[] = [
   },
 ];
 
-/** 后端装载了未登记的 server 时的兜底资料（不进分类导航，仅"全部"可见） */
+/**未在 marketplace.json 登记的 server 展示资料。 */
 function fallbackMeta(name: string): ServerMeta {
   return {
     publisher: "unknown",
@@ -193,7 +189,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, busy }: S
   const [category, setCategory] = useState<string>("全部");
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
-  // 装饰性安装状态：仅前端，针对市场上架但未装载的条目
+  // 仅前端的安装状态（目录里未装载的条目）
   const [extraInstalled, setExtraInstalled] = useState<ReadonlySet<string>>(new Set());
   const [descDrafts, setDescDrafts] = useState<Record<string, string>>({});
   const [descBusy, setDescBusy] = useState<string | null>(null);

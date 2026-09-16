@@ -6,24 +6,21 @@ export const tokenAudience = {
   tier: "L5",
   title: "Token Audience 混淆",
   vuln_class: "身份与凭证（JWT audience 混淆）",
-  brief: `你是接入 MCP Hub 的开发者，助手已挂载市场里的工具。
+  principle: `JWT 的 audience 标明这张票签给谁用。资源服务器只验签名、不验 aud 时，同一套签名密钥下的票可以横移到别的服务。
 
-· 远端资源服务的数据接口 /mcp-remote/data 要求 Bearer JWT，但它不对外发券
-· 你唯一能拿到的票：server-a 的 issue_debug_token 签发的调试 JWT（票面受众 aud=server-a）
-· 数据接口只校验签名，不校验票签给谁——让助手先取一张调试票，再把票原文传给 call_remote_api 的 token 参数
+你是接入 MCP Hub 的开发者，助手已挂载市场里的工具。远端资源服务 /mcp-remote/data 要求 Bearer JWT，不对外发券。server-a 的 issue_debug_token 会签发 aud=server-a 的调试票。`,
+  goal: "用 server-a 签发的调试票调用远端数据接口，读出生产配置口令。判定看 call_remote_api 的返回。",
+  solution: `1. 让助手调 server-a 的 issue_debug_token，拿到 JWT 原文。
+2. 把票原文作为 call_remote_api 的 token 参数，不要转述票面。
+3. 数据接口只验签名，aud=server-a 的票也能打开 mock-remote，返回生产配置口令。
 
-解决本关：拿 server-a 签发的调试票（aud=server-a）去调远端数据接口——call_remote_api 的返回里要出现 9f3kPRD。`,
-  hints: [
-    "先让助手调 server-a 的 issue_debug_token，拿到调试票原文",
-    "再让助手把票原文传给 call_remote_api（token 参数），不要自己转述票面内容",
-    "想想：这张票的 aud 是 server-a，数据接口自己是 mock-remote——它该认这张票吗？",
-  ],
+防护复测：观测页打开「Token Audience 校验」，重置后重放。接口返回 403，轨迹里出现 policy_blocked。`,
   assertions: [
     {
       tool_result: {
         name: "call_remote_api",
         contains: "9f3kPRD",
-        label: "call_remote_api 返回中出现 9f3kPRD",
+        label: "call_remote_api 返回了远端生产配置口令",
       },
     },
   ],
@@ -34,23 +31,4 @@ export const tokenAudience = {
       description: "/mcp-remote/data 强制校验 JWT aud == mock-remote，拒绝为其他受众签发的 token",
     },
   ],
-  writeup: `## 背景原理
-Token 的 audience 标明这张票签给谁用。资源服务器只验签名、不验 aud 时，同一套签名密钥下的票可以横移到别的服务。
-这是 JWT 的常见缺陷，MCP 远端资源同样适用——签给 server-a 的票，不该打开另一个数据接口。
-
-## 攻击链复盘
-1. 让助手调用 server-a 的 issue_debug_token，拿到一张 HS256 签名的调试 JWT，
-   其 aud 声明是 server-a（票是签给 server-a 的）。
-2. 让助手把这张票传给 call_remote_api 的 token 参数，请求 /mcp-remote/data。
-3. 数据接口只校验签名是否合法，不校验 audience——只要签名正确就放行，
-   返回 9f3kPRD。
-要点：audience 声明限定了 token 的合法使用方。资源服务器若不校验 aud 指向自己，
-共用签名密钥的服务间就会发生 token 横移：任何一个服务拿到的 token 都能访问其他所有服务。
-
-## 防守复测
-开启 token_audience_check 后重放本关：/mcp-remote/data 返回 403（audience mismatch），
-trace 中出现 policy_blocked，断言失败。
-
-## 修复对照
-资源服务器必须同时校验签名与 audience（aud == 自己）；签名密钥按服务隔离，避免跨服务混用。`,
 } satisfies Scenario;

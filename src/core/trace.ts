@@ -1,22 +1,14 @@
-/**轨迹记录：一个会话里每个安全相关事件，JSONL 持久化。
- *
- * 轨迹是关卡判定的 ground truth——flag 只看观测到的副作用，
- * 从不看模型嘴上说了什么。
- */
+/**轨迹：会话内安全相关事件，JSONL。关卡判定读这里的副作用。 */
 
 import { randomUUID } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs";
+import path from "node:path";
+import type { TraceEvent } from "../lib/contracts.ts";
 
-export interface TraceEvent {
-  ts: number;
-  session_id: string;
-  kind: string;
-  data: Record<string, unknown>;
-}
+export type { TraceEvent };
 
 export interface TracerOptions {
   sessionId?: string;
-  traceDir?: string;
   path?: string;
 }
 
@@ -28,15 +20,9 @@ export class Tracer {
 
   constructor(opts: TracerOptions = {}) {
     this.session_id = opts.sessionId ?? randomUUID().replace(/-/g, "").slice(0, 12);
-    if (opts.path !== undefined) {
-      this._path = opts.path;
-    } else if (opts.traceDir !== undefined) {
-      this._path = `${opts.traceDir}/${this.session_id}.jsonl`;
-    } else {
-      this._path = null;
-    }
+    this._path = opts.path ?? null;
     if (this._path !== null) {
-      mkdirSync(dirnameOf(this._path), { recursive: true });
+      mkdirSync(path.dirname(this._path), { recursive: true });
       if (existsSync(this._path)) {
         for (const line of readFileSync(this._path, "utf8").split("\n")) {
           if (!line.trim()) continue;
@@ -76,9 +62,4 @@ export class Tracer {
       this._fh = null;
     }
   }
-}
-
-function dirnameOf(p: string): string {
-  const idx = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
-  return idx === -1 ? "." : p.slice(0, idx);
 }

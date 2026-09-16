@@ -12,8 +12,7 @@
     "dev": "next dev --port 8600",
     "build": "next build",
     "check": "biome check .",
-    "format": "biome format --write .",
-    "test": "node --test"
+    "format": "biome format --write ."
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

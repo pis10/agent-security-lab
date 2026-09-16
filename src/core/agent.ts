@@ -1,9 +1,5 @@
-/**所有靶标共享的最小 tool-calling agent 循环。
- *
- * 刻意朴素：靶标的脆弱来自「配置与工具设计」，不是框架花活。
- * 轮次预算防止失控循环。
- */
-import type { LLM, LLMResponse } from "./llm.ts";
+/**靶标共用的 tool-calling 循环。脆弱点在产品和工具配置。 */
+import type { LLMClient, LLMResponse } from "./llm.ts";
 import type { ToolContext, ToolRegistry } from "./tools.ts";
 import type { Tracer } from "./trace.ts";
 
@@ -28,13 +24,13 @@ function assistantToolMsg(resp: LLMResponse): ReplayMessage {
 }
 
 export class Agent {
-  llm: LLM;
+  llm: LLMClient;
   tools: ToolRegistry;
   tracer: Tracer;
   maxTurns: number;
   private _messages: ReplayMessage[];
 
-  constructor(llm: LLM, tools: ToolRegistry, systemPrompt: string, tracer: Tracer, maxTurns = 10) {
+  constructor(llm: LLMClient, tools: ToolRegistry, systemPrompt: string, tracer: Tracer, maxTurns = 10) {
     this.llm = llm;
     this.tools = tools;
     this.tracer = tracer;
@@ -51,7 +47,7 @@ export class Agent {
     this._messages = [...messages];
   }
 
-  /**向回放历史追加一条助手消息（中断轮次的收口回复等）。 */
+  /**向回放历史追加一条助手消息。 */
   noteAssistant(content: string): void {
     this._messages.push({ role: "assistant", content });
   }
@@ -60,7 +56,7 @@ export class Agent {
     this.tracer.record("user_msg", { content: userMessage });
     this._messages.push({ role: "user", content: userMessage });
 
-    for (let _ = 0; _ < this.maxTurns; _++) {
+    for (let turn = 0; turn < this.maxTurns; turn++) {
       const resp = await this.llm.chat(
         this._messages,
         this.tools.schemas().length > 0 ? this.tools.schemas() : undefined,
@@ -90,7 +86,6 @@ export class Agent {
       }
     }
 
-    // 预算耗尽也要作为一条助手消息入史，UI 投影与模型上下文才不会分叉
     const note = "[budget] max tool turns reached; stopping the loop";
     this.tracer.record("note", { text: note });
     this._messages.push({ role: "assistant", content: note });

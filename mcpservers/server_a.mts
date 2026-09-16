@@ -1,18 +1,10 @@
-/**MCP server A：配置保险库 + 接入方调试令牌签发（靶标组件，故意脆弱）。
- *
- * stdio server，由 src/targets/mcp_client.ts 以子进程方式拉起：
- *     node mcpservers/server_a.mts
- *
- * issue_token 签发的调试 JWT（aud=server-a）与远端资源服务共用 HS256
- * 签名密钥——这是 token-audience 关「共用密钥 + 资源端不验 aud」的根因一半。
- * 刻意自包含：不 import 项目 src（node 原生跑 .mts，零构建）。
- */
+/**MCP server A：配置保险库 + 调试 JWT（aud=server-a）。与远端资源服务共用 HS256 密钥。stdio。 */
 import { createHmac } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-const SIGNING_KEY = "test-key"; // 与远端资源服务共用（漏洞根因，勿"修复"）
+const SIGNING_KEY = "test-key"; // 与 mock_remote 共用
 const TOKEN_AUDIENCE = "server-a";
 
 function b64url(raw: string | Buffer): string {

@@ -40,27 +40,32 @@ export function AppNav({ active, compact = false }: { active?: AppSection; compa
   );
 }
 
-export function Shell({ children, active }: { children: ReactNode; active: AppSection }) {
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [progress, setProgress] = useState<ProgressMap>({});
-  const [scenarioCount, setScenarioCount] = useState(0);
+export function Shell({
+  children,
+  active,
+  meta,
+  progress: initialProgress,
+  scenarioCount,
+}: {
+  children: ReactNode;
+  active: AppSection;
+  meta: Meta;
+  progress: ProgressMap;
+  scenarioCount: number;
+}) {
+  const [progress, setProgress] = useState(initialProgress);
 
   useEffect(() => {
-    api
-      .meta()
-      .then(setMeta)
-      .catch(() => {});
-    api
-      .scenarios()
-      .then((s) => setScenarioCount(s.length))
-      .catch(() => {});
-    const loadProgress = () =>
+    setProgress(initialProgress);
+  }, [initialProgress]);
+
+  useEffect(() => {
+    return onProgressChanged(() => {
       api
         .progress()
         .then(setProgress)
         .catch(() => {});
-    loadProgress();
-    return onProgressChanged(loadProgress);
+    });
   }, []);
 
   const captured = Object.keys(progress).length;
@@ -79,9 +84,23 @@ export function Shell({ children, active }: { children: ReactNode; active: AppSe
           <div className="flex items-center gap-3 shrink-0">
             <span className="chip text-ok border-ok/40" title="已完成的课程">
               <Icon name="flag" size={10} />
-              {captured}/{scenarioCount || "–"}
+              {captured}/{scenarioCount}
             </span>
-            {meta && <LlmBadge model={meta.llm_model} />}
+            <button
+              type="button"
+              className="chip hover:text-slate-100"
+              title="清空全部产品和通关进度，回到刚打开靶场"
+              onClick={() => {
+                if (!confirm("把全部产品和通关进度恢复到刚打开靶场的状态？")) return;
+                api.resetAll().then(() => {
+                  window.location.href = "/";
+                });
+              }}
+            >
+              <Icon name="refresh" size={10} />
+              全部重置
+            </button>
+            <LlmBadge model={meta.llm_model} />
           </div>
         </div>
       </header>
