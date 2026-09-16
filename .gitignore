@@ -1,24 +1,12 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
+# Node / Next
+node_modules/
+.next/
+out/
 
 # Local secrets / runtime state
 .env
-traces/
 data/runtime/
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-
 # Tooling
-.ruff_cache/
-.pytest_cache/
 .DS_Store
+*.tsbuildinfo

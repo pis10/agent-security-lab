@@ -5,26 +5,24 @@ on:
   pull_request:
 
 jobs:
-  backend:
+  app:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
         with:
-          version: latest
-      - run: uv sync
-      - run: uv run ruff check src
-
-  frontend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+          version: 12
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - working-directory: frontend
-        run: npm ci
-      - working-directory: frontend
-        run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t agent-security-lab .

@@ -1,12 +1,9 @@
-# Build context hygiene: never ship secrets, venvs, or runtime state into the image.
+# 构建上下文卫生：密钥、依赖、运行时状态一律不进镜像。
 .git
-.venv
+.github
 .env
 node_modules
-frontend/node_modules
-frontend/dist
+.next
 data/runtime
-traces
-.ruff_cache
-__pycache__
-AI-Security.pdf
+tests
+*.md

@@ -1,0 +1,18 @@
+# 一键起跑：cp .env.example .env（填 GLM API Key）→ docker compose up -d --build
+# 端口只发布到回环地址；世界与通关进度持久化在 asl-data 卷，重建容器不丢。
+services:
+  asl:
+    build: .
+    image: agent-security-lab
+    container_name: agent-security-lab
+    ports:
+      - "127.0.0.1:8600:8600"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - asl-data:/app/data/runtime
+
+volumes:
+  asl-data:
+    name: asl-data

@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-100 text-slate-800 antialiased;
+}
+
+::selection {
+  background: rgba(255, 82, 82, 0.28);
+}
+
+@layer components {
+  .panel {
+    @apply bg-panel border border-edge rounded-lg;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-edge bg-elevated text-sm text-slate-200 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn border-accent/50 text-accent hover:bg-accent/10 hover:border-accent;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-edge text-dim;
+  }
+  .chip-light {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-200 text-slate-500 bg-white;
+  }
+
+  .p-card {
+    @apply bg-white border border-slate-200 rounded-lg shadow-product;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise-in {
+  animation: rise-in 0.25s ease-out both;
+}
+
+.console-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.console-scroll::-webkit-scrollbar-thumb {
+  background: #222c3a;
+  border-radius: 3px;
+}
+.console-scroll::-webkit-scrollbar-thumb:hover {
+  background: #324155;
+}
+.console-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.product-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.product-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.product-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+.product-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
