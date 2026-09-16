@@ -16,7 +16,7 @@ docker compose up -d --build
 
 `.env` 只放本机，compose 注入容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。
 
-改镜像源码需要 Node 24 + pnpm（`pnpm check` / `pnpm build`），跑靶场仍走上面的 compose。
+改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm build`），跑靶场仍走上面的 compose。
 
 ## 怎么玩
 
