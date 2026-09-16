@@ -63,6 +63,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  chatMessages: (targetId: string) =>
+    req<WorldInfo>(`/api/worlds/${targetId}/chat`),
   act: (targetId: string, action: string, args: Record<string, unknown>) =>
     req<Record<string, unknown>>(`/api/worlds/${targetId}/act`, {
       method: "POST",

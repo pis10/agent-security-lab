@@ -192,7 +192,13 @@ class WorldManager:
     def chat(self, target_id: str, message: str) -> str:
         world = self.ensure(target_id)
         world.messages.append({"role": "user", "content": message})
-        reply = world.agent.run(message, world.ctx)
+        try:
+            reply = world.agent.run(message, world.ctx)
+        except Exception:
+            # 中断的轮次也要收口：否则留下只有用户消息的半截对话，
+            # 用户离开页面回来后就是一条永远没有回复的消息。
+            logger.exception("world %s chat turn interrupted", target_id)
+            reply = "[error] 这一轮助手没有跑完（目标侧中断）。可以重发一次，或到观测页查看这轮已发生的调用。"
         world.messages.append({"role": "assistant", "content": reply})
         self._save_chat(world)
         return reply

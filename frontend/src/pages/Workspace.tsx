@@ -30,6 +30,8 @@ export function Workspace() {
   const [toast, setToast] = useState<Observation[]>([]);
   const [worldError, setWorldError] = useState<string | null>(null);
   const seenPassed = useRef<Set<string>>(new Set());
+  const passedPrimed = useRef(false);
+  const busyRef = useRef(false);
 
   const product = productOf(targetId);
 
@@ -50,6 +52,7 @@ export function Workspace() {
     });
     setToast([]);
     setWorldError(null);
+    passedPrimed.current = false;
     api
       .ensureWorld(targetId, missionId || null)
       .then((w) => {
@@ -75,11 +78,24 @@ export function Workspace() {
         const w = list.find((x) => x.target_id === targetId);
         if (w) setAppliedDefenses(new Set(w.enabled_defenses));
       }).catch(() => {});
+      // 离开页面期间跑完的轮次，回来自动补上；发送中的乐观消息由 send 自己管
+      api.chatMessages(targetId)
+        .then((w) => {
+          if (!busyRef.current) setMessages(w.messages ?? []);
+        })
+        .catch(() => {});
       api
         .observations(targetId)
         .then((body) => {
           setObservations(body.observations);
-          const fresh = body.observations.filter((o) => o.passed && !seenPassed.current.has(o.scenario_id));
+          const passedNow = body.observations.filter((o) => o.passed);
+          if (!passedPrimed.current) {
+            // 进页时已经达成的不算新达成（复测/重进不弹），只弹本页会话里的「从未过到过」
+            passedPrimed.current = true;
+            for (const o of passedNow) seenPassed.current.add(o.scenario_id);
+            return;
+          }
+          const fresh = passedNow.filter((o) => !seenPassed.current.has(o.scenario_id));
           if (fresh.length) {
             for (const o of fresh) seenPassed.current.add(o.scenario_id);
             const preferred = missionId
@@ -114,13 +130,19 @@ export function Workspace() {
       if (!ready || busy) return;
       setMessages((m) => [...m, { role: "user", content: message }]);
       setBusy(true);
+      busyRef.current = true;
       api
         .chat(targetId, message)
-        .then((r) => setMessages((m) => [...m, { role: "assistant", content: r.reply }]))
+        // 以服务端为准回填（轮询同步同一来源，避免双写重复）
+        .then(() => api.chatMessages(targetId))
+        .then((w) => setMessages(w.messages ?? []))
         .catch((e) => setMessages((m) => [...m, { role: "assistant", content: `[error] ${e.message}` }]))
-        .finally(() => setBusy(false));
+        .finally(() => {
+          busyRef.current = false;
+          setBusy(false);
+        });
     },
-    [ready, busy, targetId]
+    [ready, busy, targetId, missionId]
   );
 
   const act = useCallback(

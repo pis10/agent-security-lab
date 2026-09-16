@@ -189,6 +189,12 @@ def api_chat(target_id: str, body: ChatBody) -> dict:
     return {"reply": reply}
 
 
+@app.get("/api/worlds/{target_id}/chat")
+def api_get_chat(target_id: str) -> dict:
+    world = _world_or_404(target_id)
+    return {"messages": list(world.messages)}
+
+
 @app.post("/api/worlds/{target_id}/chat/reset")
 def api_reset_chat(target_id: str) -> dict:
     try:
