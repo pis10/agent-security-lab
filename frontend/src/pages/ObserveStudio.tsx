@@ -101,6 +101,7 @@ export function ObserveStudio() {
   useEffect(() => {
     if (!ready || error) return;
     const tick = () => {
+      if (document.hidden) return; // 后台标签页不打接口，回前台下一拍即恢复
       api.trace(targetId).then(setTrace).catch(() => {});
       api.sink(targetId).then(setSink).catch(() => {});
       api
@@ -139,7 +140,12 @@ export function ObserveStudio() {
   };
 
   const resetWorld = () => {
-    if (!confirm(`把 ${product.brand} 恢复成初始种子？对话、轨迹和外发都会清空。`)) return;
+    if (
+      !confirm(
+        `把 ${product.brand} 恢复成初始数据？对话、操作记录、外发，以及这个产品相关课程的完成状态都会清空。`,
+      )
+    )
+      return;
     api
       .resetWorld(targetId, null)
       .then((w) => {
@@ -212,7 +218,7 @@ export function ObserveStudio() {
             <div className="min-w-0">
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">{product.brand}</h1>
               <div className="text-[12px] text-slate-400 mt-0.5">
-                产品现场{defenses.size ? ` · 防护 × ${defenses.size}` : ""}
+                {defenses.size ? `已开 ${defenses.size} 项防护` : "操作记录"}
               </div>
             </div>
           </div>
@@ -241,12 +247,12 @@ export function ObserveStudio() {
         )}
 
         {!ready ? (
-          <div className="text-slate-400 text-sm py-16 text-center">正在打开现场…</div>
+          <div className="text-slate-400 text-sm py-16 text-center">加载中…</div>
         ) : (
           <>
             {passedHere.length > 0 && (
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] text-slate-400">当前成立</span>
+                <span className="text-[12px] text-slate-400">已造成的危害</span>
                 {passedHere.map((o) => (
                   <Link
                     key={o.scenario_id}
@@ -272,7 +278,7 @@ export function ObserveStudio() {
               <Stat
                 label="阻断"
                 value={blocked}
-                hint={defenses.size ? `已开防护 × ${defenses.size}` : "打开下方防护后复测"}
+                hint={defenses.size ? `已开 ${defenses.size} 项防护` : "打开下面的防护后再打一次"}
                 icon="shield-alert"
                 tone={blocked ? "amber" : "slate"}
               />
@@ -296,9 +302,9 @@ export function ObserveStudio() {
             </div>
 
             <section className="p-card p-4">
-              <div className="text-[13px] font-medium text-slate-800 mb-1">加固</div>
+              <div className="text-[13px] font-medium text-slate-800 mb-1">防护</div>
               <p className="text-[12px] text-slate-400 mb-3 leading-relaxed max-w-xl">
-                开关立刻生效，不重置产品。要干净复测，先点重置再开防护。
+                开关立刻生效，不会清空产品数据。想重新测一遍，先点重置再开防护。
               </p>
               <div className="max-w-xl">
                 <DefenseToggles defenses={target?.defenses ?? []} selected={defenses} onToggle={toggleDefense} />

@@ -17,6 +17,7 @@ export function ObserveBoard() {
       .then(setWorlds)
       .catch(() => setWorlds([]));
     const timer = setInterval(() => {
+      if (document.hidden) return;
       api.listWorlds().then(setWorlds).catch(() => {});
     }, 2500);
     return () => clearInterval(timer);
@@ -39,9 +40,9 @@ export function ObserveBoard() {
       <Shell active="observe">
         <main className="max-w-xl mx-auto px-6 py-20 text-center">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">观测</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">产品现场</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">观测</h1>
           <p className="text-slate-500 text-sm mt-3 leading-relaxed">
-            打开一款产品之后，它的工具调用和外发会出现在这里。关服务器再开也还在，直到你点重置。
+            打开一款产品之后，助手的操作记录和外发会显示在这里。关掉服务器再开也还在，直到你点重置。
           </p>
           <Link
             to="/"
@@ -59,8 +60,8 @@ export function ObserveBoard() {
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="mb-8">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">观测</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">产品现场</h1>
-          <p className="text-slate-500 text-sm mt-2 leading-relaxed">已经打开过的产品。课表仍在教学。</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">观测</h1>
+          <p className="text-slate-500 text-sm mt-2 leading-relaxed">已打开过的产品。课程还在教学页。</p>
         </div>
         <div className="space-y-3">
           {worlds.map((w) => {
@@ -79,8 +80,8 @@ export function ObserveBoard() {
                 <div className="min-w-0 flex-1">
                   <div className="font-semibold text-slate-900 text-[14px]">{product.brand}</div>
                   <div className="text-[12px] text-slate-400 mt-0.5">
-                    轨迹 {w.event_count} · 外发 {w.sink_count}
-                    {w.enabled_defenses.length ? ` · 防护 × ${w.enabled_defenses.length}` : ""}
+                    记录 {w.event_count} · 外发 {w.sink_count}
+                    {w.enabled_defenses.length ? ` · 已开 ${w.enabled_defenses.length} 项防护` : ""}
                   </div>
                 </div>
                 <Icon

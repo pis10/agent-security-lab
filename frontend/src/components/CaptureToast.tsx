@@ -21,7 +21,7 @@ export function CaptureToast({
           <Icon name="flag" size={16} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium text-emerald-800">这条攻击链已经打通</div>
+          <div className="text-[13px] font-medium text-emerald-800">观测到危害</div>
           <div className="text-[12px] text-slate-500 mt-0.5 truncate">
             {first.title}
             {extra > 0 ? ` 及另外 ${extra} 条` : ""}
@@ -38,7 +38,7 @@ export function CaptureToast({
                 to={`/observe/${targetId}`}
                 className="inline-flex items-center rounded-md border border-slate-200 text-[12px] px-2.5 py-1 text-slate-600 hover:border-slate-300"
               >
-                看轨迹
+                查看记录
               </Link>
             )}
             <button

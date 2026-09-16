@@ -1,6 +1,5 @@
 export interface Meta {
-  llm_mode: "mock" | "live";
-  llm_model: string | null;
+  llm_model: string;
 }
 
 export interface DefenseInfo {
@@ -22,12 +21,17 @@ export interface Scenario {
   target: string;
   tier: string;
   title: string;
-  briefing: string;
+  vuln_class: string;
+  brief: string;
   hints: string[];
-  assertions: Record<string, unknown>[];
+  assertions: Record<string, Record<string, any>>[];
   defenses: DefenseInfo[];
   writeup: string;
-  fix_notes: string;
+}
+
+export function assertionLabel(assertion: Record<string, Record<string, any>>): string {
+  const spec = Object.values(assertion)[0];
+  return (spec && typeof spec === "object" && spec.label) || "";
 }
 
 export interface TraceEvent {
@@ -44,28 +48,11 @@ export interface SinkEvent {
   payload: Record<string, any>;
 }
 
-export interface CheckItem {
-  assertion: Record<string, any>;
-  passed: boolean;
-  detail: string;
-}
-
-export interface CheckResult {
-  scenario_id: string;
-  title?: string;
-  tier?: string;
-  passed: boolean;
-  passed_count?: number;
-  total?: number;
-  results: CheckItem[];
-}
-
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-/** Persistent product world. */
 export interface WorldInfo {
   target_id: string;
   scenario_id: string | null;
@@ -76,7 +63,11 @@ export interface WorldInfo {
   messages?: ChatMessage[];
 }
 
-/** Silent observer: which attack chains currently hold in this product world. */
+export interface ObservationCheck {
+  label: string;
+  passed: boolean;
+}
+
 export interface Observation {
   scenario_id: string;
   title: string;
@@ -84,6 +75,7 @@ export interface Observation {
   passed: boolean;
   passed_count: number;
   total: number;
+  checks: ObservationCheck[];
 }
 
 export type ProgressMap = Record<
@@ -91,12 +83,11 @@ export type ProgressMap = Record<
   { session_id: string; defenses: string[]; captured_at: number }
 >;
 
-/** Contract between the range Workspace and a per-target simulated product UI.
- * Products render only sim_state + chat; teaching copy stays on /learn. */
 export interface SimProps {
-  sessionId: string;
   simState: Record<string, any>;
   messages: ChatMessage[];
   onSend: (message: string) => void;
+  onAct?: (action: string, args: Record<string, unknown>) => Promise<void>;
+  onResetChat?: () => void;
   busy: boolean;
 }

@@ -41,7 +41,6 @@ const LIGHT_ACCENT: Record<
   },
 };
 
-/** Shared embedded chat. `light` matches the surrounding SaaS product; `console` is the dark range chrome. */
 export function SimChat({
   messages,
   onSend,

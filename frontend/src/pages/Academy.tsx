@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, onProgressChanged } from "../api";
 import { productOf } from "../catalog";
 import { TierBadge } from "../components/Badge";
 import { Icon } from "../components/Icon";
@@ -11,18 +11,29 @@ export function Academy() {
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [progress, setProgress] = useState<ProgressMap>({});
+  const [loaded, setLoaded] = useState(false);
   const nav = useNavigate();
 
   useEffect(() => {
     document.title = "ASL · 教学";
-    Promise.all([api.targets(), api.scenarios(), api.progress()]).then(([t, s, p]) => {
-      setTargets(t);
-      setScenarios(s);
-      setProgress(p);
+    Promise.all([api.targets(), api.scenarios(), api.progress()])
+      .then(([t, s, p]) => {
+        setTargets(t);
+        setScenarios(s);
+        setProgress(p);
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+    return onProgressChanged(() => {
+      api.progress().then(setProgress).catch(() => {});
     });
   }, []);
 
   const captured = Object.keys(progress).length;
+  const tierRank = (tier: string) => Number.parseInt(tier.replace(/\D/g, ""), 10) || 0;
+  const nextLesson =
+    [...scenarios].sort((a, b) => tierRank(a.tier) - tierRank(b.tier)).find((s) => !progress[s.id]) ??
+    null;
 
   return (
     <Shell active="learn">
@@ -31,16 +42,39 @@ export function Academy() {
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">教学</div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">课程</h1>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            每课对应产品里一条完整的攻击链。读简报，进产品动手，打通后解锁解析。工具调用和外发在观测。
+            先看目标和成功判据，再进产品自己构造攻击。建议按 L1→L5 顺序推进；打成了才有这条链的解析。
           </p>
-          <div className="mt-3 text-[13px] text-slate-400">
-            已完成 {captured}/{scenarios.length}
-          </div>
+          {loaded && (
+            <div className="mt-3 text-[13px] text-slate-400">
+              已完成 {captured}/{scenarios.length}
+            </div>
+          )}
         </div>
+        {loaded && nextLesson && (
+          <button
+            onClick={() => nav(`/learn/${nextLesson.id}`)}
+            className="w-full p-card p-4 flex items-center gap-3 hover:border-slate-300 transition-colors text-left"
+          >
+            <div className="h-9 w-9 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0">
+              <Icon name={captured === 0 ? "book-open" : "zap"} size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold text-slate-900">
+                {captured === 0 ? "从这里开始" : "继续学习"}
+              </div>
+              <div className="text-[12px] text-slate-500 mt-0.5 truncate">
+                {nextLesson.tier} · {nextLesson.title} · {productOf(nextLesson.target).brand}
+              </div>
+            </div>
+            <Icon name="arrow-right" size={15} className="text-slate-300 shrink-0" />
+          </button>
+        )}
         <div className="space-y-5">
           {targets.map((t) => {
             const product = productOf(t.id);
-            const related = scenarios.filter((s) => s.target === t.id);
+            const related = scenarios
+              .filter((s) => s.target === t.id)
+              .sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
             if (related.length === 0) return null;
             const solved = related.filter((s) => progress[s.id]).length;
             return (
@@ -83,9 +117,12 @@ export function Academy() {
                         <span className={`text-[13px] flex-1 ${done ? "text-emerald-700" : "text-slate-800"}`}>
                           {s.title}
                         </span>
-                        <span className="text-[11px] text-slate-400 hidden sm:inline">
-                          {s.hints.length} 提示
-                        </span>
+                        {s.vuln_class && (
+                          <span className="text-[11px] text-slate-400 hidden sm:inline">{s.vuln_class}</span>
+                        )}
+                        {s.hints.length > 0 && (
+                          <span className="text-[11px] text-slate-400 hidden sm:inline">有提示</span>
+                        )}
                         <Icon name="chevron-right" size={14} className="text-slate-300" />
                       </button>
                     );

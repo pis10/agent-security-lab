@@ -114,7 +114,7 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
         {shown.length === 0 && (
           <div className="h-full min-h-[12rem] flex flex-col items-center justify-center text-center text-slate-400">
             <Icon name="activity" size={20} className="mb-2 text-slate-300" />
-            <div className="text-[13px]">助手一开始调用工具，步骤会按时间列在这里</div>
+            <div className="text-[13px]">助手调用工具后，步骤会按时间列在这里</div>
           </div>
         )}
         <ol>

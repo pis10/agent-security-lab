@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, onProgressChanged } from "../api";
 import { productOf } from "../catalog";
 import { Icon } from "../components/Icon";
 import { Shell } from "../components/Shell";
@@ -19,6 +19,9 @@ export function RangeBoard() {
       setScenarios(s);
       setProgress(p);
     });
+    return onProgressChanged(() => {
+      api.progress().then(setProgress).catch(() => {});
+    });
   }, []);
 
   return (
@@ -28,7 +31,7 @@ export function RangeBoard() {
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">靶场</div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">打开一个产品</h1>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            进入完整的仿真应用。每款产品都内置了会调用工具的助手；你的操作会留下可观测的副作用，对应课程随即解锁。
+            打开产品，自己构造攻击。原理和实战在教学里；助手做过什么记在观测页。
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -61,10 +64,12 @@ export function RangeBoard() {
                 <p className="text-[13px] text-slate-500 mt-3 leading-relaxed flex-1">{product.blurb}</p>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[12px] text-slate-400">
                   <span>打开应用</span>
-                  {related.length > 0 && (
+                  {related.length > 0 ? (
                     <span className={seen > 0 ? "text-emerald-600" : ""}>
-                      {seen > 0 ? `已观察 ${seen}/${related.length}` : `${related.length} 条潜伏攻击链`}
+                      {seen > 0 ? `已完成 ${seen}/${related.length}` : `${related.length} 节课`}
                     </span>
+                  ) : (
+                    <span>自由玩 · 无课程</span>
                   )}
                 </div>
               </button>

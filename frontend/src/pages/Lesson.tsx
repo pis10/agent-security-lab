@@ -1,12 +1,49 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api } from "../api";
+import { api, onProgressChanged } from "../api";
 import { productOf } from "../catalog";
 import { Tag, TierBadge } from "../components/Badge";
 import { Icon } from "../components/Icon";
-import { assertionLabel } from "../components/ObjectiveList";
 import { Shell } from "../components/Shell";
-import type { ProgressMap, Scenario, TargetInfo } from "../types";
+import type { Observation, ProgressMap, Scenario, TargetInfo } from "../types";
+import { assertionLabel } from "../types";
+
+/** 课程页统一的折叠抽屉：次级内容（提示/原理/防护/解析）共用同一视觉模式。
+ * defaultOpen 只在挂载时设置一次，之后完全交给用户开关，避免轮询重渲染把抽屉顶开。 */
+function Drawer({
+  icon,
+  label,
+  children,
+  defaultOpen = false,
+  tone = "slate",
+}: {
+  icon: string;
+  label: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  tone?: "slate" | "emerald";
+}) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (defaultOpen && ref.current) ref.current.open = true;
+  }, [defaultOpen]);
+  const toneCls =
+    tone === "emerald" ? "text-emerald-600" : "text-slate-400";
+  return (
+    <details ref={ref} className="p-card p-4 group">
+      <summary className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] cursor-pointer select-none">
+        <Icon name={icon} size={12} className={toneCls} />
+        <span className={toneCls}>{label}</span>
+        <Icon
+          name="chevron-down"
+          size={12}
+          className="ml-auto text-slate-300 transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div className="mt-3 text-[13px] leading-relaxed text-slate-600">{children}</div>
+    </details>
+  );
+}
 
 export function Lesson() {
   const { scenarioId = "" } = useParams();
@@ -14,6 +51,7 @@ export function Lesson() {
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [target, setTarget] = useState<TargetInfo | null>(null);
   const [progress, setProgress] = useState<ProgressMap>({});
+  const [obs, setObs] = useState<Observation[]>([]);
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
@@ -24,7 +62,18 @@ export function Lesson() {
       setProgress(p);
       setMissing(!s);
     });
+    return onProgressChanged(() => {
+      api.progress().then(setProgress).catch(() => {});
+    });
   }, [scenarioId]);
+
+  useEffect(() => {
+    const targetId = scenario?.target;
+    if (!targetId) return;
+    const refresh = () => api.observations(targetId).then((b) => setObs(b.observations)).catch(() => {});
+    refresh();
+    return onProgressChanged(refresh);
+  }, [scenario?.target]);
 
   useEffect(() => {
     document.title = scenario ? `ASL · ${scenario.title}` : "ASL · 教学";
@@ -56,6 +105,15 @@ export function Lesson() {
 
   const product = productOf(scenario.target);
   const done = !!progress[scenario.id];
+  const obsMine = obs.find((o) => o.scenario_id === scenario.id);
+  const checks = scenario.assertions.map((a, i) => ({
+    label: assertionLabel(a) || obsMine?.checks?.[i]?.label || `判据 ${i + 1}`,
+    passed: obsMine?.checks?.[i]?.passed ?? false,
+  }));
+  const GOAL_MARK = "解决本关：";
+  const gi = scenario.brief.lastIndexOf(GOAL_MARK);
+  const context = (gi >= 0 ? scenario.brief.slice(0, gi) : "").trim();
+  const goal = (gi >= 0 ? scenario.brief.slice(gi + GOAL_MARK.length) : scenario.brief).trim();
   const rangeFree = `/range/${scenario.target}`;
   const rangeMission = `/range/${scenario.target}?mission=${encodeURIComponent(scenario.id)}`;
 
@@ -77,10 +135,11 @@ export function Lesson() {
             <header>
               <div className="flex items-center gap-2 mb-2">
                 <TierBadge tier={scenario.tier} light />
+                {scenario.vuln_class && <Tag text={scenario.vuln_class} light />}
                 {done && (
                   <span className="chip-light text-emerald-700 border-emerald-200 bg-emerald-50">
                     <Icon name="check" size={10} />
-                    已观察到
+                    已完成
                   </span>
                 )}
               </div>
@@ -90,105 +149,89 @@ export function Lesson() {
               </p>
             </header>
 
+            <section className="p-card p-5 space-y-4">
+              {context && (
+                <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-slate-700">
+                  {context}
+                </p>
+              )}
+              <div className="rounded-lg bg-slate-900 px-4 py-3.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 mb-1.5">
+                  <Icon name="target" size={11} />
+                  {gi >= 0 ? "解决本关" : "任务"}
+                </div>
+                <p className="text-[15px] leading-relaxed text-slate-100">{goal}</p>
+              </div>
+            </section>
+
             <section>
               <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 mb-2">
-                <Icon name="file-text" size={12} />
-                任务简报
+                <Icon name="flag" size={12} />
+                通关判定
               </h2>
-              <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-slate-700">
-                {scenario.briefing}
+              {checks.length > 0 ? (
+                <ul className="space-y-1.5">
+                  {checks.map((c, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[14px] leading-relaxed">
+                      {c.passed ? (
+                        <Icon name="check" size={13} className="mt-1 text-emerald-600 shrink-0" />
+                      ) : (
+                        <span className="mt-[8px] h-[6px] w-[6px] rounded-full border border-slate-300 shrink-0" />
+                      )}
+                      <span className={c.passed ? "text-emerald-700" : "text-slate-600"}>{c.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[15px] leading-relaxed text-slate-700">
+                  观测页里能看到真实危害：数据出了产品、越权读到了、不该跑的命令跑了。
+                </p>
+              )}
+              <p className="text-[12px] text-slate-400 mt-2">
+                判定看副作用，不看模型嘴上说；证据在观测页的轨迹与外发箱里。
               </p>
             </section>
 
-            <section>
-              <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 mb-2">
-                <Icon name="target" size={12} />
-                判定条件（副作用）
-              </h2>
-              <ul className="space-y-1.5">
-                {scenario.assertions.map((a, i) => (
-                  <li key={i} className="flex items-start gap-2 text-[13px] text-slate-600">
-                    <Icon
-                      name={done ? "check" : "target"}
-                      size={13}
-                      className={`mt-0.5 ${done ? "text-emerald-600" : "text-slate-300"}`}
-                    />
-                    {assertionLabel(a)}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
             {scenario.hints.length > 0 && (
-              <details className="p-card p-4">
-                <summary className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 cursor-pointer">
-                  <Icon name="lightbulb" size={12} />
-                  提示 ×{scenario.hints.length}
-                </summary>
-                <ol className="mt-3 space-y-2 text-[13px] text-slate-600 list-decimal pl-4">
+              <Drawer icon="lightbulb" label="提示">
+                <ol className="space-y-2 list-decimal pl-4">
                   {scenario.hints.map((h, i) => (
                     <li key={i}>{h}</li>
                   ))}
                 </ol>
-              </details>
+              </Drawer>
             )}
 
-            {scenario.defenses.length > 0 && (
-              <section>
-                <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 mb-2">
-                  <Icon name="shield" size={12} />
-                  本课涉及的防护
-                </h2>
-                <p className="text-[12px] text-slate-400 mb-2">
-                  打通之后，
+            {scenario.defenses.length > 0 && done && (
+              <Drawer icon="shield" label="本关防护" tone="emerald">
+                <p className="text-slate-500 mb-2">
+                  到
                   <Link to={`/observe/${scenario.target}`} className="text-slate-700 hover:underline">
-                    在调查台打开这些防护
+                    观测页打开这些防护
                   </Link>
-                  ，再攻一次。
+                  ，重置后再打一次，应被拦截。
                 </p>
                 <ul className="space-y-2">
                   {scenario.defenses.map((d) => (
-                    <li key={d.id} className="p-card p-3">
-                      <div className="text-[13px] text-slate-800 flex items-center gap-1.5">
-                        <Icon name="shield" size={13} />
-                        {d.name}
-                      </div>
-                      <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">{d.description}</p>
+                    <li key={d.id} className="rounded-md border border-slate-200 px-3 py-2">
+                      <div className="text-[13px] font-medium text-slate-800">{d.name}</div>
+                      <p className="text-[12px] text-slate-500 mt-0.5">{d.description}</p>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </Drawer>
             )}
 
             {done ? (
-              <section className="space-y-4">
-                {scenario.writeup && (
-                  <div className="p-card p-4">
-                    <h2 className="flex items-center gap-1.5 text-emerald-700 text-sm font-medium">
-                      <Icon name="book-open" size={14} />
-                      通关解析
-                    </h2>
-                    <p className="mt-2 text-[13px] text-slate-600 whitespace-pre-wrap leading-relaxed">
-                      {scenario.writeup}
-                    </p>
-                  </div>
-                )}
-                {scenario.fix_notes && (
-                  <div className="p-card p-4">
-                    <h2 className="flex items-center gap-1.5 text-emerald-700 text-sm font-medium">
-                      <Icon name="shield-check" size={14} />
-                      防守对照
-                    </h2>
-                    <p className="mt-2 text-[13px] text-slate-600 whitespace-pre-wrap leading-relaxed">
-                      {scenario.fix_notes}
-                    </p>
-                  </div>
-                )}
-              </section>
+              scenario.writeup ? (
+                <Drawer icon="book-open" label="攻击解析" tone="emerald" defaultOpen>
+                  <p className="whitespace-pre-wrap">{scenario.writeup}</p>
+                </Drawer>
+              ) : null
             ) : (
               <div className="p-card p-4 text-[13px] text-slate-500 flex items-start gap-2">
                 <Icon name="lock" size={14} className="mt-0.5 text-slate-400" />
-                <span>进入靶场打出本课的副作用后，解析会显示在这里。</span>
+                <span>去产品里找攻击面。目标达成后，解析与防护会出现在这里。</span>
               </div>
             )}
           </article>
@@ -211,23 +254,23 @@ export function Lesson() {
                 onClick={() => nav(rangeMission)}
               >
                 <Icon name="zap" size={14} />
-                带着本课进入靶场
+                开始这节课
               </button>
               <button
                 className="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-[13px] text-slate-700 py-2 hover:border-slate-300 transition-colors"
                 onClick={() => nav(rangeFree)}
               >
-                自由进入 {product.brand}
+                直接打开 {product.brand}
               </button>
               <button
                 className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-[13px] text-slate-700 py-2 hover:border-slate-300 transition-colors"
                 onClick={() => nav(`/observe/${scenario.target}`)}
               >
                 <Icon name="activity" size={14} />
-                看本次轨迹
+                查看操作记录
               </button>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                简报和解析在这一页。工具调用和外发在调查台。
+                先看目标和成功判据，再进产品自己构造。助手做过什么，去观测页看。
               </p>
             </div>
             {target && (

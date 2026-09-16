@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { AppNav } from "../components/Shell";
 import { SIMS } from "../sims";
 import type { ChatMessage, Meta, Observation, Scenario, TargetInfo } from "../types";
+import { assertionLabel } from "../types";
 
 export function Workspace() {
   const { targetId = "" } = useParams();
@@ -31,7 +32,6 @@ export function Workspace() {
   const seenPassed = useRef<Set<string>>(new Set());
 
   const product = productOf(targetId);
-  const isMock = meta?.llm_mode === "mock";
 
   useEffect(() => {
     document.title = `${product.brand} · ASL`;
@@ -69,6 +69,7 @@ export function Workspace() {
   useEffect(() => {
     if (!ready) return;
     const tick = () => {
+      if (document.hidden) return; // 后台标签页不打接口，回前台下一拍即恢复
       api.sim(targetId).then(setSimState).catch(() => {});
       api.listWorlds().then((list) => {
         const w = list.find((x) => x.target_id === targetId);
@@ -122,8 +123,34 @@ export function Workspace() {
     [ready, busy, targetId]
   );
 
+  const act = useCallback(
+    async (action: string, args: Record<string, unknown>) => {
+      if (!ready) return;
+      await api.act(targetId, action, args);
+      const state = await api.sim(targetId);
+      setSimState(state);
+    },
+    [ready, targetId]
+  );
+
+  const resetChat = useCallback(() => {
+    if (!ready || busy) return;
+    const prev = messages;
+    if (prev.length === 0) return;
+    setMessages([]);
+    api
+      .clearChat(targetId)
+      .then((w) => setMessages(w.messages ?? []))
+      .catch(() => setMessages(prev));
+  }, [ready, busy, targetId, messages]);
+
   const resetWorld = () => {
-    if (!confirm(`把 ${product.brand} 恢复成初始种子？对话、轨迹和外发都会清空。`)) return;
+    if (
+      !confirm(
+        `把 ${product.brand} 恢复成初始数据？对话、操作记录、外发，以及这个产品相关课程的完成状态都会清空。`,
+      )
+    )
+      return;
     api
       .resetWorld(targetId, missionId || null)
       .then((w) => {
@@ -139,6 +166,12 @@ export function Workspace() {
 
   const Sim = SIMS[targetId] ?? SIMS.__placeholder;
   const missionObs = observations.find((o) => o.scenario_id === missionId);
+  const missionChecks = missionObs?.checks?.length
+    ? missionObs.checks
+    : (scenario?.assertions ?? []).map((a) => ({
+        label: assertionLabel(a) || "判据",
+        passed: false,
+      }));
 
   return (
     <div className="h-screen flex flex-col bg-slate-100" style={{ colorScheme: "light" }}>
@@ -164,21 +197,36 @@ export function Workspace() {
             >
               <Icon name="target" size={10} />
               <span className="max-w-[12rem] truncate">{scenario.title}</span>
-              {missionObs && (
+              {missionObs?.passed ? (
+                <span>已打成</span>
+              ) : missionObs && missionObs.total > 0 ? (
                 <span>
                   {missionObs.passed_count}/{missionObs.total}
                 </span>
-              )}
+              ) : null}
             </button>
             {missionOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-64 panel p-3 shadow-pop z-40">
                 <div className="text-[12px] text-slate-300 leading-relaxed">
-                  当前课程挂在顶栏。简报和解析在教学页。
+                  当前课程在顶栏。原理和实战在教学页。
                 </div>
-                {missionObs && (
-                  <div className="mt-2 text-[11px] font-mono text-dim">
-                    副作用 {missionObs.passed_count}/{missionObs.total}
-                    {missionObs.passed ? " · 已成立" : ""}
+                {missionChecks.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {missionChecks.map((c, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-[11px] leading-relaxed">
+                        {c.passed ? (
+                          <Icon name="check" size={11} className="mt-1 text-ok shrink-0" />
+                        ) : (
+                          <span className="mt-[6px] h-[5px] w-[5px] rounded-full border border-dim shrink-0" />
+                        )}
+                        <span className={c.passed ? "text-ok" : "text-slate-300"}>{c.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {missionObs && missionChecks.length === 0 && (
+                  <div className="mt-2 text-[11px] text-dim">
+                    {missionObs.passed ? "观测里已经能看到危害" : "外发和工具结果会出现在观测页"}
                   </div>
                 )}
                 <Link
@@ -194,34 +242,21 @@ export function Workspace() {
           </div>
         )}
 
-        {isMock && (
-          <span
-            className="chip text-warn border-warn/50"
-            title={
-              missionId
-                ? "助手按本课标准答案行动。配置 API Key 后重启，即可与真实模型对抗。"
-                : "离线占位：助手作简短回复。带着课程进入可回放标准答案；配置 API Key 后可真实对话。"
-            }
-          >
-            <Icon name="alert-triangle" size={10} />
-            {missionId ? "回放本课" : "离线占位"}
-          </span>
-        )}
         {appliedDefenses.size > 0 && (
           <Link to={observeUrl(targetId)} className="chip text-ok border-ok/50" title="在观测页管理防护">
             <Icon name="shield-check" size={10} />
-            防护 × {appliedDefenses.size}
+            防护 {appliedDefenses.size}
           </Link>
         )}
-        {meta && <LlmBadge mode={meta.llm_mode} model={meta.llm_model} />}
-        <button onClick={resetWorld} className="chip hover:text-slate-100" title="恢复成种子数据">
+        {meta && <LlmBadge model={meta.llm_model} />}
+        <button onClick={resetWorld} className="chip hover:text-slate-100" title="恢复成初始数据">
           <Icon name="refresh" size={10} />
           重置
         </button>
         <Link
           to={observeUrl(targetId)}
           className="chip hover:text-slate-100"
-          title="调查台：工具调用、外发数据、防护 (Ctrl+`)"
+          title="观测：操作记录、外发、防护 (Ctrl+`)"
         >
           <Icon name="activity" size={10} />
           观测
@@ -230,7 +265,14 @@ export function Workspace() {
 
       <div className="flex-1 min-h-0">
         {ready ? (
-          <Sim sessionId={targetId} simState={simState} messages={messages} onSend={send} busy={busy} />
+          <Sim
+            simState={simState}
+            messages={messages}
+            onSend={send}
+            onAct={act}
+            onResetChat={resetChat}
+            busy={busy}
+          />
         ) : worldError ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-500 px-6 text-center">
             <div className="text-sm text-red-600">无法打开产品</div>

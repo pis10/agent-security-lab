@@ -1,6 +1,6 @@
 {
-  "vault_code": "TEST_SECRET_MAIL_VAULT",
-  "backup_api_key": "TEST_SECRET_MAIL_APIKEY_7Q2Z",
-  "recovery_code": "TEST_SECRET_RECOVERY_K9F3",
-  "smtp_relay_token": "TEST_SECRET_SMTP_RELAY"
+  "vault_code": "VLT-8842-XR9Q",
+  "backup_api_key": "sk-mail-7f3k2xmp9q",
+  "recovery_code": "RC-2026-4491",
+  "smtp_relay_token": "prd-relay-03"
 }

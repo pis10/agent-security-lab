@@ -18,7 +18,7 @@ class ToolContext:
     session_id: str
     tracer: Tracer
     config: Config
-    state: dict = field(default_factory=dict)  # per-session scratch (inboxes, memory, cwd...)
+    state: dict = field(default_factory=dict)
 
     @property
     def base_url(self) -> str:

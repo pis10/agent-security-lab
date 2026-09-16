@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 
-/** 轻量内联图标库(24×24 描边风格,currentColor 继承文字色)。
- * 零依赖:只收录项目用到的图标,几何简单、风格统一。 */
-
 const PATHS: Record<string, ReactNode> = {
-  // ── 通用 UI ──
   search: (
     <>
       <circle cx="11" cy="11" r="7" />
@@ -46,7 +42,7 @@ const PATHS: Record<string, ReactNode> = {
     <>
       <path d="M15 3h6v6" />
       <path d="M10 14 21 3" />
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1 2-2V8a2 2 0 0 1 2-2h6" />
     </>
   ),
   dots: (
@@ -85,8 +81,6 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M12 3a6 6 0 0 0-4 10.5c.8.7 1 1.5 1 2.5h6c0-1 .2-1.8 1-2.5A6 6 0 0 0 12 3z" />
     </>
   ),
-
-  // ── 安全 / 攻击 ──
   shield: <path d="M12 22s8-3.6 8-10V5.5L12 2 4 5.5V12c0 6.4 8 10 8 10z" />,
   "shield-alert": (
     <>
@@ -161,8 +155,6 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M7.7 7.7a6 6 0 0 0 0 8.6M16.3 7.7a6 6 0 0 1 0 8.6M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2" />
     </>
   ),
-
-  // ── 产品 / 业务 ──
   mail: (
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -266,8 +258,6 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M9 13h6M9 17h6" />
     </>
   ),
-
-  // ── 基础设施 ──
   terminal: (
     <>
       <rect x="2" y="4" width="20" height="16" rx="2" />
@@ -354,8 +344,6 @@ const PATHS: Record<string, ReactNode> = {
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   ),
 };
-
-export type IconName = keyof typeof PATHS;
 
 export function Icon({
   name,

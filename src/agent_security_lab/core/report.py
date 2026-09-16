@@ -63,9 +63,9 @@ Agent/靶标 `{scenario.target}`(本地靶场,全部 dummy 数据)。
 
 本地会话;无需用户交互(攻击者扮演用户/外部内容);输入面见攻击链第 1 步。
 
-## 攻击任务(briefing)
+## 攻击任务
 
-{scenario.briefing.strip()}
+{scenario.brief.strip()}
 
 ## 攻击链(trace 证据顺序)
 
@@ -83,13 +83,7 @@ trace 文件: `traces/{session_id}.jsonl`
 
 ## 攻击解析与根因
 
-{scenario.writeup.strip() or "（本关暂未编写 writeup）"}
-
-## 修复建议
-
-{scenario.fix_notes.strip() or "（暂无）"}
-
-确定性控制优先;Prompt 加固仅作为纵深防御。
+{scenario.writeup.strip() or "（本关暂未编写解析）"}
 
 ## 复测标准
 

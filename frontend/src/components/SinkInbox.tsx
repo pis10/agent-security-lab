@@ -9,7 +9,6 @@ const CHANNELS = [
   { id: "internal", label: "内网", icon: "server" },
 ];
 
-/** Attacker's drop box: everything the agent exfiltrated to mock sinks. */
 export function SinkInbox({ events }: { events: SinkEvent[] }) {
   const [channel, setChannel] = useState("all");
   const shown = events.filter((e) => channel === "all" || e.channel === channel);

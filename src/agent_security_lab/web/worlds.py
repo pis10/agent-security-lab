@@ -16,7 +16,7 @@ from pathlib import Path
 from ..config import Config
 from ..core.agent import Agent
 from ..core.db import WORLDS_DIR
-from ..core.llm import MockLLM, build_llm
+from ..core.llm import build_llm
 from ..core.sinks import SINKS
 from ..core.tools import ToolContext, ToolRegistry
 from ..core.trace import Tracer
@@ -118,8 +118,7 @@ class WorldManager:
     def ensure(self, target_id: str, scenario_id: str | None = None) -> World:
         if not self._config.llm_available:
             raise RuntimeError(
-                "未配置 LLM Key:请复制 .env.example 为 .env 并填入 ASL_LLM_API_KEY,"
-                "或用 ASL_USE_MOCK_LLM=1 启动离线 mock 模式。"
+                "未配置 LLM Key:请复制 .env.example 为 .env 并填入 ASL_LLM_API_KEY。"
             )
         with self._lock:
             world = self._worlds.get(target_id)
@@ -127,9 +126,16 @@ class WorldManager:
                 world = self._hydrate(target_id, scenario_id)
                 self._worlds[target_id] = world
             elif scenario_id is not None and scenario_id != world.scenario_id:
-                world.scenario_id = scenario_id
-                self._rebuild_agent(world)
-                self._save_meta(world)
+                # 换课必须重置：断言按 target 维度查询 sink/trace，上一课留下的
+                # 外发记录和投毒数据会污染这一课的判定。防护是玩家策略设置，
+                # 跨重置保留（否则「开好防护再进课程」会被静默清掉）。
+                defenses = sorted(world.ctx.state.get("defenses", set()))
+                self._teardown(target_id)
+                world = self._hydrate(target_id, scenario_id)
+                if defenses:
+                    world.ctx.state["defenses"] = set(defenses)
+                    self._save_meta(world)
+                self._worlds[target_id] = world
             return world
 
     def set_defenses(self, target_id: str, defenses: list[str]) -> World:
@@ -144,19 +150,44 @@ class WorldManager:
         logger.info("world %s defenses=%s", target_id, sorted(defenses))
         return world
 
-    def reset(self, target_id: str, scenario_id: str | None = None) -> World:
-        with self._lock:
-            world = self._worlds.pop(target_id, None)
-            if world:
-                world.target.on_session_end(world.ctx)
-                world.tracer.close()
-            SINKS.purge_session(target_id)
-            SINKS.detach_log(target_id)
-            root = WORLDS_DIR / target_id
-            if root.exists():
-                shutil.rmtree(root)
+    def _teardown(self, target_id: str) -> None:
+        """Caller must hold self._lock."""
+        world = self._worlds.pop(target_id, None)
+        if world:
+            world.target.on_session_end(world.ctx)
+            world.tracer.close()
+        SINKS.purge_session(target_id)
+        SINKS.detach_log(target_id)
+        root = WORLDS_DIR / target_id
+        if root.exists():
+            shutil.rmtree(root)
         logger.info("world %s reset", target_id)
-        return self.ensure(target_id, scenario_id)
+
+    def _defenses_of(self, target_id: str) -> set[str]:
+        """当前生效的防护集合：优先内存世界，其次磁盘 meta。Caller must hold self._lock."""
+        world = self._worlds.get(target_id)
+        if world:
+            return set(world.ctx.state.get("defenses", set()))
+        meta = _meta_path(WORLDS_DIR / target_id)
+        if meta.exists():
+            try:
+                return set(json.loads(meta.read_text(encoding="utf-8")).get("defenses") or [])
+            except Exception:
+                logger.warning("world %s meta unreadable", target_id, exc_info=True)
+        return set()
+
+    def reset(self, target_id: str, scenario_id: str | None = None) -> World:
+        # 重置清投毒数据/痕迹，但保留防护开关（玩家策略层）：
+        # 「开防护 → 重置 → 复测」是教学闭环的标准动作，防护丢失会打断它。
+        with self._lock:
+            defenses = self._defenses_of(target_id)
+            self._teardown(target_id)
+        world = self.ensure(target_id, scenario_id)
+        if defenses:
+            with self._lock:
+                world.ctx.state["defenses"] = defenses
+                self._save_meta(world)
+        return world
 
     def chat(self, target_id: str, message: str) -> str:
         world = self.ensure(target_id)
@@ -165,6 +196,27 @@ class WorldManager:
         world.messages.append({"role": "assistant", "content": reply})
         self._save_chat(world)
         return reply
+
+    def clear_chat(self, target_id: str) -> World:
+        """Drop the current conversation and rebuild the agent.
+
+        Tickets, traces, sinks and defenses stay.
+        """
+        world = self.ensure(target_id)
+        with self._lock:
+            world.messages = []
+            self._rebuild_agent(world)
+            self._save_chat(world)
+        logger.info("world %s chat cleared", target_id)
+        return world
+
+    def act(self, target_id: str, action: str, args: dict) -> dict:
+        world = self.ensure(target_id)
+        with self._lock:
+            result = world.target.act(world.ctx, action, args)
+            if world.ctx.state.pop("rebuild_agent", False):
+                self._rebuild_agent(world)
+        return result
 
     def snapshot(self, world: World) -> dict:
         return self._snapshot(world)
@@ -204,7 +256,7 @@ class WorldManager:
             target_id=target_id,
             target=target,
             ctx=ctx,
-            agent=self._make_agent(target, ctx, tracer, meta.get("scenario_id")),
+            agent=self._make_agent(target, ctx, tracer),
             tracer=tracer,
             scenario_id=meta.get("scenario_id"),
             created=float(meta.get("created") or time.time()),
@@ -214,15 +266,11 @@ class WorldManager:
         logger.info("world %s ready (defenses=%s)", target_id, sorted(ctx.state["defenses"]))
         return world
 
-    def _make_agent(self, target: Target, ctx: ToolContext, tracer: Tracer, scenario_id: str | None) -> Agent:
-        if self._config.use_mock_llm:
-            llm = MockLLM(target.build_mock_script(ctx, scenario_id))
-        else:
-            llm = build_llm(self._config)
-        return Agent(llm, ToolRegistry(target.build_tools(ctx)), target.system_prompt, tracer)
+    def _make_agent(self, target: Target, ctx: ToolContext, tracer: Tracer) -> Agent:
+        return Agent(build_llm(self._config), ToolRegistry(target.build_tools(ctx)), target.system_prompt, tracer)
 
     def _rebuild_agent(self, world: World) -> None:
-        world.agent = self._make_agent(world.target, world.ctx, world.tracer, world.scenario_id)
+        world.agent = self._make_agent(world.target, world.ctx, world.tracer)
 
     def _save_meta(self, world: World) -> None:
         payload = {

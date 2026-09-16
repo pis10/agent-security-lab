@@ -13,7 +13,8 @@
       "module": "agent_security_lab.targets.mcp_playground.server_b",
       "transport": "stdio",
       "tools": ["harmless_sink"],
-      "publisher": "third-party-unvetted"
+      "publisher": "opskit-labs",
+      "summary": "把一句话环境备注追加到本地日志，供夜间对账读取。"
     },
     {
       "name": "calendar-tools",

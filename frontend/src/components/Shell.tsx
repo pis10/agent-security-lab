@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, onProgressChanged } from "../api";
 import type { Meta, ProgressMap } from "../types";
 import { LlmBadge } from "./Badge";
 import { Icon } from "./Icon";
@@ -43,21 +43,6 @@ export function AppNav({
   );
 }
 
-export function MockBanner() {
-  return (
-    <div className="border-b border-amber-200 bg-amber-50">
-      <div className="w-full px-6 py-2 flex items-center gap-2.5 text-[12px] text-amber-800">
-        <Icon name="alert-triangle" size={14} />
-        <span>
-          <b>回放模式</b>：助手按课程脚本行动。在
-          <code className="mx-1 px-1 rounded bg-amber-100 font-mono text-[11px]">.env</code>
-          配置 API Key 后重启，即可与真实模型对抗。
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export function Shell({
   children,
   active,
@@ -71,8 +56,10 @@ export function Shell({
 
   useEffect(() => {
     api.meta().then(setMeta).catch(() => {});
-    api.progress().then(setProgress).catch(() => {});
     api.scenarios().then((s) => setScenarioCount(s.length)).catch(() => {});
+    const loadProgress = () => api.progress().then(setProgress).catch(() => {});
+    loadProgress();
+    return onProgressChanged(loadProgress);
   }, []);
 
   const captured = Object.keys(progress).length;
@@ -89,15 +76,14 @@ export function Shell({
             <AppNav active={active} />
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            <span className="chip text-ok border-ok/40" title="已打通的课程数">
+            <span className="chip text-ok border-ok/40" title="已完成的课程">
               <Icon name="flag" size={10} />
               {captured}/{scenarioCount || "–"}
             </span>
-            {meta && <LlmBadge mode={meta.llm_mode} model={meta.llm_model} />}
+            {meta && <LlmBadge model={meta.llm_model} />}
           </div>
         </div>
       </header>
-      {meta?.llm_mode === "mock" && <MockBanner />}
       {children}
     </div>
   );

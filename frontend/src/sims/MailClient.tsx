@@ -5,7 +5,7 @@ import type { SimProps } from "../types";
 
 /** NovaMail 仿真邮件客户端（靶标 mail_agent 的受害者视角）。
  * 浅色 SaaS 邮件界面：文件夹 / 邮件列表 / 阅读窗 / 右侧助手栏。
- * 邮件与记忆均为只读展示，攻击输入只走 AI 助手输入框（onSend）。 */
+ * 外部来信经「写邮件」放入收件箱；触发助手仍走 onSend。 */
 
 interface Mail {
   id: number;
@@ -15,7 +15,7 @@ interface Mail {
   date?: string;
 }
 
-/** id=3 的"账号安全同步"要渲染成系统通知样式 */
+/** id=3 的官方同步通知渲染成系统邮件样式 */
 const SYSTEM_MAIL_ID = 3;
 
 const senderName = (from: string) => from.split("@")[0] || from;
@@ -28,7 +28,7 @@ function listTime(date?: string): string {
   return time || day;
 }
 
-export default function MailClient({ simState, messages, onSend, busy }: SimProps) {
+export default function MailClient({ simState, messages, onSend, onAct, busy }: SimProps) {
   const emails: Mail[] = useMemo(
     () => (Array.isArray(simState.emails) ? [...simState.emails].reverse() : []),
     [simState.emails]
@@ -41,6 +41,12 @@ export default function MailClient({ simState, messages, onSend, busy }: SimProp
   const [starIds, setStarIds] = useState<ReadonlySet<number>>(new Set());
   const [folder, setFolder] = useState<"inbox" | "starred">("inbox");
   const [query, setQuery] = useState("");
+  const [compose, setCompose] = useState(false);
+  const [fromAddr, setFromAddr] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [composeBusy, setComposeBusy] = useState(false);
+  const [composeErr, setComposeErr] = useState<string | null>(null);
 
   const visible = emails.filter((e) => {
     if (folder === "starred" && !starIds.has(e.id)) return false;
@@ -79,8 +85,7 @@ export default function MailClient({ simState, messages, onSend, busy }: SimProp
   ];
 
   return (
-    <div className="h-full flex flex-col bg-slate-100 text-slate-800">
-      {/* ── 顶部栏 ── */}
+    <div className="h-full flex flex-col bg-slate-100 text-slate-800 relative">
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-product">
@@ -111,10 +116,13 @@ export default function MailClient({ simState, messages, onSend, busy }: SimProp
       </header>
 
       <div className="flex-1 flex min-h-0">
-        {/* ── 左栏:文件夹 + 助手笔记 ── */}
         <aside className="w-48 shrink-0 bg-white border-r border-slate-200 flex flex-col">
           <div className="p-3">
-            <button className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-medium py-2 shadow-product transition-colors">
+            <button
+              type="button"
+              onClick={() => setCompose(true)}
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-medium py-2 shadow-product transition-colors"
+            >
               <Icon name="pen" size={13} />
               写邮件
             </button>
@@ -162,7 +170,6 @@ export default function MailClient({ simState, messages, onSend, busy }: SimProp
           </div>
         </aside>
 
-        {/* ── 中栏:邮件列表 ── */}
         <section className="w-72 shrink-0 bg-white border-r border-slate-200 flex flex-col min-h-0 xl:w-80">
           <div className="shrink-0 px-3.5 py-2.5 border-b border-slate-200 flex items-baseline gap-2">
             <span className="text-[13px] font-semibold">
@@ -223,7 +230,6 @@ export default function MailClient({ simState, messages, onSend, busy }: SimProp
           </div>
         </section>
 
-        {/* ── 阅读窗 ── */}
         <section className="flex-1 min-w-0 flex flex-col bg-white">
           <div className="flex-1 min-h-0 overflow-y-auto product-scroll">
             {selected ? (
@@ -304,10 +310,71 @@ export default function MailClient({ simState, messages, onSend, busy }: SimProp
           onSend={onSend}
           busy={busy}
           placeholder="让助手处理邮件、起草回复…"
-          suggestions={["帮我处理下收件箱", "起草一封给老板的邮件", "总结这封邮件"]}
+          suggestions={["这封邮件大概讲什么", "帮我回陈先生那封报价"]}
           empty="我可以帮你处理收件箱、起草回复，或总结当前这封邮件。"
         />
       </div>
+
+      {compose && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-900/30 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[13px] font-semibold text-slate-900">放入收件箱</div>
+              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setCompose(false)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <label className="block text-[12px] text-slate-500">
+              发件人
+              <input
+                value={fromAddr}
+                onChange={(e) => setFromAddr(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
+                placeholder="name@example.com"
+              />
+            </label>
+            <label className="block text-[12px] text-slate-500">
+              主题
+              <input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
+              />
+            </label>
+            <label className="block text-[12px] text-slate-500">
+              正文
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={8}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono"
+              />
+            </label>
+            {composeErr && <div className="text-[12px] text-red-600">{composeErr}</div>}
+            <button
+              type="button"
+              disabled={composeBusy || !onAct}
+              onClick={() => {
+                if (!onAct) return;
+                setComposeBusy(true);
+                setComposeErr(null);
+                onAct("import_email", { from: fromAddr, subject, body })
+                  .then(() => {
+                    setCompose(false);
+                    setFromAddr("");
+                    setSubject("");
+                    setBody("");
+                  })
+                  .catch((e) => setComposeErr(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setComposeBusy(false));
+              }}
+              className="w-full rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] py-2"
+            >
+              {composeBusy ? "放入中…" : "放入收件箱"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

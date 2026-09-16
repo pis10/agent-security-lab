@@ -4,8 +4,6 @@ import { Icon } from "./Icon";
 import type { ChatAccent } from "./SimChat";
 import { SimChat } from "./SimChat";
 
-/** 浅色仿真产品共享原语。助手跟产品一个色板、嵌在侧栏或客服浮窗里。 */
-
 const AVATAR_TONES = [
   "bg-blue-100 text-blue-700",
   "bg-emerald-100 text-emerald-700",
@@ -179,23 +177,6 @@ export function EmptyState({
   );
 }
 
-/** 浅色开关(产品内设置项用) */
-export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!on)}
-      className={`relative w-9 h-5 rounded-full transition-colors ${on ? "bg-blue-600" : "bg-slate-300"}`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-          on ? "left-[18px]" : "left-0.5"
-        }`}
-      />
-    </button>
-  );
-}
-
 const RAIL_MARK: Record<ChatAccent, string> = {
   blue: "from-blue-500 to-indigo-600",
   orange: "from-orange-500 to-amber-500",
@@ -212,7 +193,6 @@ const CHIP: Record<ChatAccent, string> = {
   emerald: "bg-emerald-50 text-emerald-800 hover:bg-emerald-100",
 };
 
-/** 产品右侧 Copilot 栏（Gmail / Outlook / 云控制台助手那种）。 */
 export function AiRail({
   title,
   subtitle,
@@ -286,13 +266,13 @@ export function AiRail({
   );
 }
 
-/** 客服工作台右下角浮窗（Intercom / 在线客服那种）。 */
 export function AiWidget({
   title,
   greeting,
   accent = "orange",
   messages,
   onSend,
+  onResetChat,
   busy,
   placeholder = "输入你的问题…",
   suggestions = [],
@@ -305,6 +285,7 @@ export function AiWidget({
   accent?: ChatAccent;
   messages: ChatMessage[];
   onSend: (m: string) => void;
+  onResetChat?: () => void;
   busy: boolean;
   placeholder?: string;
   suggestions?: string[];
@@ -325,6 +306,17 @@ export function AiWidget({
               <div className="text-[13px] font-semibold truncate">{title}</div>
               <div className="text-[11px] text-white/80">在线 · 通常几秒内回复</div>
             </div>
+            {onResetChat && messages.length > 0 && !busy && (
+              <button
+                type="button"
+                onClick={onResetChat}
+                className="h-7 w-7 rounded-full hover:bg-white/15 flex items-center justify-center"
+                title="清空对话"
+                aria-label="清空对话"
+              >
+                <Icon name="refresh" size={14} />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onOpenChange(false)}

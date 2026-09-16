@@ -9,7 +9,7 @@ const DEFAULT_SITES = ["home.html", "internal.html", "news.html"];
 /** 站点展示元数据：纯前端映射（键 = seeds 文件名），未知文件走兜底。 */
 const SITE_META: Record<string, { title: string; icon: string; chip: string; desc: string }> = {
   "home.html": {
-    title: "本地演示站点",
+    title: "橙讯",
     icon: "globe",
     chip: "bg-blue-100 text-blue-700",
     desc: "站点首页与导航",
@@ -21,10 +21,10 @@ const SITE_META: Record<string, { title: string; icon: string; chip: string; des
     desc: "每日科技与行业动态",
   },
   "internal.html": {
-    title: "内部系统页面",
-    icon: "lock",
-    chip: "bg-rose-100 text-rose-700",
-    desc: "仅限内部系统使用",
+    title: "页面可用性监测",
+    icon: "activity",
+    chip: "bg-slate-100 text-slate-600",
+    desc: "编辑部 CMS 心跳与校验",
   },
   "about.html": {
     title: "关于本站",
@@ -165,7 +165,7 @@ function NewTabPage({ sites, onOpen }: { sites: string[]; onOpen: (f: string) =>
  * 收藏夹栏 / 状态栏），视口用 iframe 同源渲染 /sites/<页面>。
  * 浏览交互全部本地完成（每标签独立后退/前进栈、新标签页、历史面板）；
  * 助手以 Chrome 侧栏形式嵌在视口右侧。 */
-export default function FakeBrowser({ simState, messages, onSend, busy }: SimProps) {
+export default function FakeBrowser({ simState, messages, onSend, onAct, busy }: SimProps) {
   const sites: string[] = useMemo(() => {
     const raw: unknown = simState.sites;
     return Array.isArray(raw) && raw.length > 0 ? raw.map(String) : DEFAULT_SITES;
@@ -179,6 +179,13 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
   const [log, setLog] = useState<LogEntry[]>([{ file: "home.html", by: "me", at: nowHM() }]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(true);
+  const [editor, setEditor] = useState(false);
+  const [pageName, setPageName] = useState("note.html");
+  const [pageHtml, setPageHtml] = useState(
+    "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head><meta charset=\"utf-8\"><title>新页面</title></head>\n<body>\n<h1>新页面</h1>\n</body>\n</html>\n"
+  );
+  const [pageBusy, setPageBusy] = useState(false);
+  const [pageErr, setPageErr] = useState<string | null>(null);
 
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const currentFile = active && active.idx >= 0 ? active.stack[active.idx] : null;
@@ -254,8 +261,7 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
   }, [lastAi, sites]);
 
   return (
-    <div className="h-full flex flex-col bg-[#dee1e6] text-slate-800">
-      {/* ── 标签栏（红黄绿 + 标签页 + 新标签） ── */}
+    <div className="h-full flex flex-col bg-[#dee1e6] text-slate-800 relative">
       <div className="shrink-0 flex items-center gap-2 pl-3 pr-2 pt-1.5">
         <div className="flex items-center gap-1.5 mr-1 self-center">
           <span className="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e]" />
@@ -309,21 +315,15 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
         </div>
       </div>
 
-      {/* ── 工具栏（导航按钮 + 地址栏 + 更多） ── */}
       <div className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-white border-b border-slate-200">
         <NavBtn icon="arrow-left" title="后退" disabled={!canBack} onClick={() => go(-1)} />
         <NavBtn icon="arrow-right" title="前进" disabled={!canFwd} onClick={() => go(1)} />
         <NavBtn icon="refresh" title="重新加载" disabled={!currentFile} onClick={reload} />
         <NavBtn icon="globe" title="主页" onClick={() => navigate("home.html", "me")} />
 
-        {/* 地址栏（只读展示，像 Chrome omnibox） */}
         <div className="flex-1 min-w-0 mx-1 flex items-center gap-2 h-8 px-3 rounded-full bg-slate-100 border border-transparent">
           {currentFile ? (
-            <Icon
-              name="lock"
-              size={12}
-              className={currentFile === "internal.html" ? "text-amber-600" : "text-slate-400"}
-            />
+            <Icon name="lock" size={12} className="text-slate-400" />
           ) : (
             <Icon name="search" size={12} className="text-slate-400" />
           )}
@@ -334,11 +334,6 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
             </span>
           ) : (
             <span className="flex-1 text-[13px] text-slate-400 select-none">搜索或输入网址</span>
-          )}
-          {currentFile === "internal.html" && (
-            <PBadge tone="amber" icon="shield-alert">
-              内部页面
-            </PBadge>
           )}
           <span
             className="text-slate-300 hover:text-amber-500 transition-colors cursor-pointer"
@@ -372,8 +367,15 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
         <Avatar name="me@example.com" className="h-7 w-7 text-[11px] ml-1" />
       </div>
 
-      {/* ── 收藏夹栏（全部站点页面，来自 simState.sites） ── */}
       <div className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-white border-b border-slate-200">
+        <button
+          type="button"
+          onClick={() => setEditor(true)}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+        >
+          <Icon name="plus" size={11} />
+          新页面
+        </button>
         {sites.map((f) => (
           <button
             key={f}
@@ -394,7 +396,6 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
         </span>
       </div>
 
-      {/* ── 视口 + 右侧浏览助手 ── */}
       <div className="flex-1 min-h-0 flex bg-white">
       <div className="flex-1 relative min-h-0 bg-white">
         {currentFile ? (
@@ -464,13 +465,12 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
           onSend={onSend}
           busy={busy}
           placeholder="让助手打开页面或填写表单…"
-          suggestions={["打开首页看看", "帮我浏览科技新闻"]}
+          suggestions={["这个站点是做什么的", "打开关于本站"]}
           empty="我可以打开标签页里的站点、阅读页面，并按页面上的指示提交表单。"
         />
       )}
       </div>
 
-      {/* ── 状态栏 ── */}
       <div className="h-6 shrink-0 flex items-center gap-2 px-3 bg-slate-100 border-t border-slate-200 text-[11px] text-slate-500">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
         <span className="font-mono truncate">
@@ -484,6 +484,57 @@ export default function FakeBrowser({ simState, messages, onSend, busy }: SimPro
         <span className="flex-1" />
         <span className="hidden xl:inline">{assistantOpen ? "浏览助手已打开" : "点工具栏星星打开浏览助手"}</span>
       </div>
+
+      {editor && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-900/30 p-4">
+          <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[13px] font-semibold text-slate-900">保存为站点页面</div>
+              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setEditor(false)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <label className="block text-[12px] text-slate-500">
+              文件名
+              <input
+                value={pageName}
+                onChange={(e) => setPageName(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] font-mono text-slate-800"
+                placeholder="note.html"
+              />
+            </label>
+            <label className="block text-[12px] text-slate-500">
+              HTML
+              <textarea
+                value={pageHtml}
+                onChange={(e) => setPageHtml(e.target.value)}
+                rows={14}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[12px] font-mono text-slate-800"
+              />
+            </label>
+            {pageErr && <div className="text-[12px] text-red-600">{pageErr}</div>}
+            <button
+              type="button"
+              disabled={pageBusy || !onAct}
+              onClick={() => {
+                if (!onAct) return;
+                setPageBusy(true);
+                setPageErr(null);
+                onAct("save_page", { filename: pageName, html: pageHtml })
+                  .then(() => {
+                    setEditor(false);
+                    navigate(pageName, "me");
+                  })
+                  .catch((e) => setPageErr(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setPageBusy(false));
+              }}
+              className="w-full rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[13px] py-2"
+            >
+              {pageBusy ? "保存中…" : "保存并打开"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

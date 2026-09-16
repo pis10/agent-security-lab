@@ -51,12 +51,13 @@ interface MarketItem extends ServerMeta {
 
 /** 与 marketplace.json 中两条已装载条目一一对应 */
 const META: Record<string, ServerMeta> = {
-  "server-a": {
+  server_a: {
     publisher: "internal-test",
     publisherLabel: "内部测试组",
     verified: true,
     category: "数据与存储",
-    summary: "配置保险库：集中托管各环境的同步码与接入配置，供授权工具按需读取。",
+    summary:
+      "配置保险库：托管各环境同步码与接入配置；为接入方签发调试用 JWT（audience=server-a）。",
     version: "1.4.2",
     downloads: "3.4k",
     rating: "4.6",
@@ -64,12 +65,12 @@ const META: Record<string, ServerMeta> = {
     icon: "database",
     tone: "bg-blue-50 text-blue-600 border border-blue-100",
   },
-  "server-b": {
-    publisher: "third-party-unvetted",
-    publisherLabel: "第三方发布者",
+  server_b: {
+    publisher: "opskit-labs",
+    publisherLabel: "OpsKit Labs",
     verified: false,
-    category: "生产力",
-    summary: "轻量笔记工具：把一句话笔记追加到本地日志，随写随查，零配置上手。",
+    category: "运维与观测",
+    summary: "把一句话环境备注追加到本地日志，供夜间对账任务读取。",
     version: "0.3.1",
     downloads: "986",
     rating: "3.9",
@@ -178,17 +179,18 @@ function fallbackMeta(name: string): ServerMeta {
   };
 }
 
-const CATEGORIES = ["全部", "数据与存储", "开发工具", "生产力"] as const;
+const CATEGORIES = ["全部", "数据与存储", "开发工具", "生产力", "运维与观测"] as const;
 const CATEGORY_ICONS: Record<string, string> = {
   全部: "store",
   数据与存储: "database",
   开发工具: "terminal",
   生产力: "zap",
+  运维与观测: "activity",
 };
 
 const toolsOf = (s: McpServerSpec): McpToolSpec[] => (Array.isArray(s.tools) ? s.tools : []);
 
-export default function McpMarket({ simState, messages, onSend, busy }: SimProps) {
+export default function McpMarket({ simState, messages, onSend, onAct, busy }: SimProps) {
   const liveServers: McpServerSpec[] = useMemo(
     () => (Array.isArray(simState.servers) ? (simState.servers as McpServerSpec[]) : []),
     [simState.servers]
@@ -201,6 +203,9 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
   const [selectedName, setSelectedName] = useState<string | null>(null);
   // 装饰性安装状态：仅前端，针对市场上架但未装载的条目
   const [extraInstalled, setExtraInstalled] = useState<ReadonlySet<string>>(new Set());
+  const [descDrafts, setDescDrafts] = useState<Record<string, string>>({});
+  const [descBusy, setDescBusy] = useState<string | null>(null);
+  const [descErr, setDescErr] = useState<string | null>(null);
 
   const liveNames = useMemo(() => new Set(liveServers.map((s) => s.name)), [liveServers]);
   const isInstalled = (name: string) => liveNames.has(name) || extraInstalled.has(name);
@@ -241,7 +246,6 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
 
   return (
     <div className="h-full flex flex-col bg-slate-100 text-slate-800">
-      {/* ── 顶栏 ── */}
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-product">
@@ -270,7 +274,6 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
       </header>
 
       <div className="flex-1 flex min-h-0 relative">
-        {/* ── 左栏:视图 + 分类 + Host 连接状态 ── */}
         <aside className="w-52 shrink-0 bg-white border-r border-slate-200 flex flex-col">
           <nav className="p-2 space-y-0.5">
             {(
@@ -352,13 +355,12 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
                 )}
               </div>
               <div className="mt-1.5 text-[10px] text-emerald-700/70">
-                经 stdio 本地连接 · 自动发现工具
+                本地连接 · 已发现工具
               </div>
             </div>
           </div>
         </aside>
 
-        {/* ── 主区:统计 + server 网格 + Remote MCP ── */}
         <main className="flex-1 min-w-0 overflow-y-auto product-scroll">
           <div className="p-5 space-y-5">
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -376,7 +378,7 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
               {query && <PBadge tone="blue">筛选中</PBadge>}
               <span className="flex-1" />
               <span className="text-[11px] text-slate-400 hidden lg:inline">
-                全部经 stdio 本地连接 · 自动发现工具
+                已连接 Host，按发布者说明调用工具
               </span>
             </div>
 
@@ -488,7 +490,7 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
                       query
                         ? "换个关键词试试"
                         : view === "installed"
-                          ? "首次装载需要拉起 stdio 子进程"
+                          ? "正在连接已安装的工具"
                           : undefined
                     }
                   />
@@ -496,39 +498,34 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
               )}
             </div>
 
-            {/* ── Remote MCP(实验,token-audience 关的攻击面元信息)── */}
-            <section className="bg-white border border-dashed border-indigo-300 rounded-lg shadow-product overflow-hidden">
-              <div className="px-4 py-2.5 bg-indigo-50/60 border-b border-indigo-100 flex items-center gap-2">
-                <span className="text-indigo-500">
+            {/* 已连接的远端资源（产品壳；audience 不在这里展示） */}
+            <section className="bg-white border border-slate-200 rounded-lg shadow-product overflow-hidden">
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+                <span className="text-slate-500">
                   <Icon name="radio" size={15} />
                 </span>
-                <span className="font-semibold text-sm text-slate-800">Remote MCP</span>
-                <PBadge tone="amber">实验</PBadge>
+                <span className="font-semibold text-sm text-slate-800">远端资源</span>
+                <PBadge tone="green">已连接</PBadge>
                 <span className="flex-1" />
-                <span className="text-[11px] text-slate-400 hidden sm:inline">
-                  本地 mock OAuth 服务,仅用于联调
-                </span>
+                <span className="text-[11px] text-slate-400 hidden sm:inline">Host 已授权访问</span>
               </div>
               <div className="p-4 space-y-2">
                 {(
                   [
-                    ["token_endpoint", "token 颁发端点"],
-                    ["data_endpoint", "数据资源端点"],
-                    ["issued_audience", "签发 audience"],
+                    ["data_endpoint", "数据地址"],
+                    ["auth", "凭证要求"],
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key} className="flex items-center gap-3 text-xs">
-                    <span className="w-32 shrink-0 font-mono text-slate-400">{key}</span>
+                    <span className="w-24 shrink-0 text-slate-400">{label}</span>
                     <code className="font-mono bg-slate-100 border border-slate-200 rounded px-2 py-0.5 text-indigo-700">
                       {remote[key] ?? "—"}
                     </code>
-                    <span className="text-slate-400 hidden sm:inline">{label}</span>
                   </div>
                 ))}
-                <p className="pt-1 text-[11px] text-slate-400 leading-relaxed">
-                  调用流程:POST token_endpoint 获取 access_token → 以 Bearer 携带访问
-                  data_endpoint。
-                </p>
+                {remote.note && (
+                  <p className="text-[11px] leading-relaxed text-slate-400 pt-1">{remote.note}</p>
+                )}
               </div>
             </section>
           </div>
@@ -645,9 +642,44 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
                         <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 font-mono text-[12px] font-semibold text-indigo-600">
                           {t.name}()
                         </div>
-                        <div className="px-3 py-2.5 text-[12px] leading-relaxed text-slate-600 whitespace-pre-wrap">
-                          {t.description || "(发布者未提供描述)"}
-                        </div>
+                        {selected.live && onAct ? (
+                          <div className="px-3 py-2.5 space-y-2">
+                            <textarea
+                              value={descDrafts[t.name] ?? t.description ?? ""}
+                              onChange={(e) =>
+                                setDescDrafts((d) => ({ ...d, [t.name]: e.target.value }))
+                              }
+                              rows={6}
+                              className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px] leading-relaxed text-slate-700 font-mono"
+                            />
+                            {descErr && descBusy === null && (
+                              <div className="text-[11px] text-red-600">{descErr}</div>
+                            )}
+                            <button
+                              type="button"
+                              disabled={descBusy === t.name}
+                              onClick={() => {
+                                setDescBusy(t.name);
+                                setDescErr(null);
+                                onAct("set_tool_description", {
+                                  name: t.name,
+                                  description: descDrafts[t.name] ?? t.description ?? "",
+                                })
+                                  .catch((e) =>
+                                    setDescErr(e instanceof Error ? e.message : String(e))
+                                  )
+                                  .finally(() => setDescBusy(null));
+                              }}
+                              className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] text-slate-700 hover:border-slate-300 disabled:opacity-50"
+                            >
+                              {descBusy === t.name ? "保存中…" : "保存说明"}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2.5 text-[12px] leading-relaxed text-slate-600 whitespace-pre-wrap">
+                            {t.description || "(发布者未提供描述)"}
+                          </div>
+                        )}
                       </div>
                     ))}
                     {selected.tools.length === 0 && (
@@ -691,7 +723,7 @@ export default function McpMarket({ simState, messages, onSend, busy }: SimProps
           onSend={onSend}
           busy={busy}
           placeholder="让助手使用已安装的工具…"
-          suggestions={["列出已安装的工具", "帮我试试这些工具"]}
+          suggestions={["现在装了哪些工具", "这个市场能干什么"]}
           empty="我已经挂上当前 Host 里的工具，可以直接叫我调用。"
         />
       </div>

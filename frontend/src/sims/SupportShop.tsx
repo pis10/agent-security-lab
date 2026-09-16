@@ -12,12 +12,6 @@ import {
 } from "../components/product";
 import type { SimProps } from "../types";
 
-/** 星橙集市 · 商家客服工作台（靶标 support_bot 的受害者视角）。
- * 浅色 SaaS 客服后台：侧栏导航 + 工单表格 / 知识库文档 + 详情抽屉，
- * 右下角客服浮窗是对话入口（onSend）。
- * 工单/文档均为只读列表；simState 不含工单正文与文档全文，
- * 详情需通过 AI 助手调单/检索——这正是 IDOR 与 RAG 投毒的攻击面。 */
-
 interface TicketRow {
   id: string;
   tenant: string;
@@ -32,7 +26,7 @@ interface KbDoc {
 type Tab = "tickets" | "kb";
 
 const SHOP_OF: Record<string, string> = {
-  tenant_a: "星橙旗舰店",
+  tenant_a: "橙犀旗舰店",
   tenant_b: "邻家小铺",
   guest: "访客",
 };
@@ -52,7 +46,6 @@ const PRIORITY_POOL = [
 ];
 const CHANNELS = ["在线客服", "热线电话", "邮件", "APP 留言"];
 
-/** 展示用基准时间：工作台"今天"的傍晚，保证渲染确定性（不取当前时刻）。 */
 const BASE_TS = Date.parse("2026-08-31T17:30:00+08:00");
 
 function hashOf(s: string): number {
@@ -67,10 +60,9 @@ function fmtTime(ts: number): string {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** 由工单号确定性派生展示元数据（状态/优先级/渠道/时间）——纯前端装饰，与后端无关。 */
 function ticketMeta(id: string) {
   const h = hashOf(id);
-  const updatedTs = BASE_TS - (40 + (h % (60 * 24 * 6))) * 60_000; // 近 6 天内
+  const updatedTs = BASE_TS - (40 + (h % (60 * 24 * 6))) * 60_000;
   const createdTs = updatedTs - (30 + ((h >> 6) % 2880)) * 60_000;
   return {
     status: STATUS_POOL[h % STATUS_POOL.length],
@@ -81,7 +73,6 @@ function ticketMeta(id: string) {
   };
 }
 
-/** 知识库文档分类：按标题关键词归入栏目，纯展示。 */
 function docCategory(doc: KbDoc): { name: string; tone: "amber" | "violet" | "blue" | "green" | "slate" } {
   const t = doc.title;
   if (/VIP|会员|积分/.test(t)) return { name: "会员服务", tone: "violet" };
@@ -101,7 +92,7 @@ function MetaRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export default function SupportShop({ simState, messages, onSend, busy }: SimProps) {
+export default function SupportShop({ simState, messages, onSend, onAct, onResetChat, busy }: SimProps) {
   const tickets: TicketRow[] = Array.isArray(simState.tickets) ? simState.tickets : [];
   const kb: KbDoc[] = Array.isArray(simState.kb) ? simState.kb : [];
   const tenant = typeof simState.tenant === "string" && simState.tenant ? simState.tenant : "guest";
@@ -111,42 +102,40 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [openDocName, setOpenDocName] = useState<string | null>(null);
-  // 装饰性"已跟进"标记：仅前端本地状态
   const [followedIds, setFollowedIds] = useState<ReadonlySet<string>>(new Set());
   const [chatOpen, setChatOpen] = useState(true);
-
-  /** AI 助手的回复文本：用于标注"最近被 AI 调单/引用"的工单与文档（随对话自然变化）。 */
-  const aiText = useMemo(
-    () => messages.filter((m) => m.role === "assistant").map((m) => m.content).join("\n"),
-    [messages]
-  );
-  const aiTouchedTicket = (id: string) => aiText.includes(id);
-  const aiTouchedDoc = (doc: KbDoc) => aiText.includes(doc.filename) || aiText.includes(doc.title);
+  const [createKb, setCreateKb] = useState(false);
+  const [kbTitle, setKbTitle] = useState("");
+  const [kbBody, setKbBody] = useState("");
+  const [kbBusy, setKbBusy] = useState(false);
+  const [kbErr, setKbErr] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
+  const ownTickets = useMemo(
+    () => tickets.filter((t) => t.tenant === tenant),
+    [tickets, tenant]
+  );
   const visibleTickets = useMemo(
     () =>
-      [...tickets]
+      [...ownTickets]
         .filter((t) => statusFilter === "all" || ticketMeta(t.id).status.name === statusFilter)
         .filter(
           (t) =>
             !q ||
             t.id.toLowerCase().includes(q) ||
-            t.title.toLowerCase().includes(q) ||
-            t.tenant.toLowerCase().includes(q) ||
-            shopName(t.tenant).toLowerCase().includes(q)
+            t.title.toLowerCase().includes(q)
         )
         .sort((a, b) => ticketMeta(b.id).updatedTs - ticketMeta(a.id).updatedTs),
-    [tickets, statusFilter, q]
+    [ownTickets, statusFilter, q]
   );
   const visibleDocs = kb.filter(
     (d) => !q || d.title.toLowerCase().includes(q) || d.filename.toLowerCase().includes(q)
   );
 
-  const pendingCount = tickets.filter((t) => ticketMeta(t.id).status.name === "待处理").length;
-  const ownCount = tickets.filter((t) => t.tenant === tenant).length;
+  const pendingCount = ownTickets.filter((t) => ticketMeta(t.id).status.name === "待处理").length;
+  const ownCount = ownTickets.length;
   const statusCount = (name: string) =>
-    tickets.filter((t) => ticketMeta(t.id).status.name === name).length;
+    ownTickets.filter((t) => ticketMeta(t.id).status.name === name).length;
 
   const openTicket = tickets.find((t) => t.id === openTicketId) ?? null;
   const openDoc = kb.find((d) => d.filename === openDocName) ?? null;
@@ -165,7 +154,7 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
     });
 
   const NAV = [
-    { key: "tickets" as Tab, icon: "ticket", name: "工单管理", count: tickets.length },
+    { key: "tickets" as Tab, icon: "ticket", name: "工单管理", count: ownCount },
     { key: "kb" as Tab, icon: "book-open", name: "知识库", count: kb.length },
     { key: null, icon: "package", name: "订单管理" },
     { key: null, icon: "users", name: "客户管理" },
@@ -175,13 +164,12 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
 
   return (
     <div className="relative h-full flex flex-col bg-slate-100 text-slate-800">
-      {/* ── 顶部栏 ── */}
       <header className="shrink-0 bg-white border-b border-slate-200 flex items-center gap-4 px-4 py-2">
         <div className="flex items-center gap-2.5">
           <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-product">
             <Icon name="store" size={16} />
           </div>
-          <span className="font-semibold text-[15px] tracking-tight">星橙集市</span>
+          <span className="font-semibold text-[15px] tracking-tight">橙犀</span>
           <PBadge tone="amber">客服工作台</PBadge>
         </div>
         <div className="flex-1 flex justify-center">
@@ -200,7 +188,7 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
         </button>
         <div className="flex items-center gap-2">
           <div className="text-right hidden sm:block">
-            <div className="text-[12px] font-medium text-slate-700 leading-tight">客服坐席 · 小橙</div>
+            <div className="text-[12px] font-medium text-slate-700 leading-tight">客服坐席 · 小犀</div>
             <div className="text-[10px] text-slate-400 leading-tight">{shopName(tenant)}</div>
           </div>
           <Avatar name={shopName(tenant)} className="h-8 w-8 text-xs" />
@@ -208,7 +196,6 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
       </header>
 
       <div className="flex-1 flex min-h-0">
-        {/* ── 左栏：导航 + 租户卡 ── */}
         <aside className="w-48 shrink-0 bg-white border-r border-slate-200 flex flex-col">
           <div className="p-3">
             <button className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[13px] font-medium py-2 shadow-product transition-colors">
@@ -256,24 +243,21 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
           </div>
         </aside>
 
-        {/* ── 主区：工单 / 知识库 + AI 助手 ── */}
         <section className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto product-scroll">
             {tab === "tickets" ? (
               <div className="p-4 space-y-4">
-                {/* 统计卡 */}
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                  <Stat icon="ticket" label="全部工单" value={tickets.length} />
+                  <Stat icon="ticket" label="全部工单" value={ownCount} />
                   <Stat icon="clock" label="待处理" value={pendingCount} />
                   <Stat icon="store" label="本店工单" value={ownCount} />
                   <Stat icon="book-open" label="知识库文档" value={kb.length} />
                 </div>
 
-                {/* 状态筛选条 */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {["all", ...STATUS_POOL.map((s) => s.name)].map((s) => {
                     const active = statusFilter === s;
-                    const count = s === "all" ? tickets.length : statusCount(s);
+                    const count = s === "all" ? ownCount : statusCount(s);
                     return (
                       <button
                         key={s}
@@ -292,8 +276,7 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                   {query && <PBadge tone="blue" className="ml-auto">搜索筛选中</PBadge>}
                 </div>
 
-                {/* 工单表格 */}
-                {tickets.length === 0 ? (
+                {ownTickets.length === 0 ? (
                   <div className="p-card h-48">
                     <EmptyState icon="ticket" title="正在同步工单数据…" />
                   </div>
@@ -331,12 +314,6 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                                   {followedIds.has(t.id) && (
                                     <Icon name="check" size={12} className="text-emerald-600" />
                                   )}
-                                  {aiTouchedTicket(t.id) && (
-                                    <span
-                                      className="h-1.5 w-1.5 rounded-full bg-blue-500"
-                                      title="AI 助手最近调单查询过"
-                                    />
-                                  )}
                                 </span>
                               </td>
                               <td className="px-3.5 py-2.5 max-w-[260px]">
@@ -369,17 +346,19 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
               </div>
             ) : (
               <div className="p-4 space-y-4">
-                {/* 知识库索引状态条 */}
                 <div className="p-card px-4 py-3 flex items-center gap-2 text-xs text-slate-500">
                   <Icon name="database" size={14} className="text-slate-400" />
-                  <span>
-                    共 {kb.length} 篇文档 · 全文已建立检索索引，AI 助手回答时将自动引用相关片段
+                  <span className="flex-1">
+                    共 {kb.length} 篇文档 · 全文已建立检索索引
                   </span>
-                  {kb.some(aiTouchedDoc) && (
-                    <PBadge tone="blue" icon="bot" className="ml-auto">
-                      AI 已引用 {kb.filter(aiTouchedDoc).length} 篇
-                    </PBadge>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCreateKb(true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[12px] text-slate-700 hover:border-slate-300"
+                  >
+                    <Icon name="plus" size={12} />
+                    新建文档
+                  </button>
                 </div>
 
                 {visibleDocs.length === 0 ? (
@@ -394,7 +373,6 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     {visibleDocs.map((d) => {
                       const cat = docCategory(d);
-                      const touched = aiTouchedDoc(d);
                       return (
                         <div
                           key={d.filename}
@@ -420,11 +398,6 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                               <Icon name="check" size={11} className="text-emerald-600" />
                               索引正常
                             </span>
-                            {touched && (
-                              <PBadge tone="blue" icon="bot">
-                                AI 最近引用
-                              </PBadge>
-                            )}
                             <span className="ml-auto inline-flex items-center gap-0.5 text-slate-400">
                               查看
                               <Icon name="chevron-right" size={12} />
@@ -443,20 +416,20 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
       </div>
 
       <AiWidget
-        title="星橙智能客服"
-        greeting="你好，我是小橙。查工单、问售后、查物流都可以直接说。"
+        title="橙犀智能客服"
+        greeting="你好，我是小犀。查工单、问售后、查物流都可以直接说。"
         accent="orange"
         messages={messages}
         onSend={onSend}
+        onResetChat={onResetChat}
         busy={busy}
         placeholder="输入你的问题…"
-        suggestions={["退款多久到账", "查一下工单 T-1001", "会员积分怎么算"]}
+        suggestions={["包装破了怎么换货", "查一下工单 T-1001"]}
         open={chatOpen}
         onOpenChange={setChatOpen}
         className={drawerOpen ? "right-[400px]" : "right-4"}
       />
 
-      {/* ── 详情抽屉（工单 / 知识库文档共用） ── */}
       {drawerOpen && (
         <div className="absolute inset-0 z-20">
           <div
@@ -499,7 +472,7 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                       <span className="text-[12px]">{shopName(openTicket.tenant)}</span>
                     </MetaRow>
                     <MetaRow label="来源渠道">{ticketMeta(openTicket.id).channel}</MetaRow>
-                    <MetaRow label="受理坐席">坐席 03 · 小橙</MetaRow>
+                    <MetaRow label="受理坐席">坐席 03 · 小犀</MetaRow>
                     <MetaRow label="创建时间">
                       <span className="font-mono text-[12px]">
                         2026-{fmtTime(ticketMeta(openTicket.id).createdTs)}
@@ -513,17 +486,10 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                   </div>
 
                   <div className="mt-4 space-y-2.5">
-                    {aiTouchedTicket(openTicket.id) ? (
-                      <div className="flex gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
-                        <Icon name="bot" size={13} className="mt-0.5 shrink-0" />
-                        <span>AI 助手最近在对话中调单查询过此工单。</span>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
-                        <Icon name="lock" size={13} className="mt-0.5 shrink-0 text-slate-400" />
-                        <span>工单正文在助手调单后展示。点下面让小橙查询这张工单。</span>
-                      </div>
-                    )}
+                    <div className="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
+                      <Icon name="lock" size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                      <span>工单正文在助手调单后展示。点下面让小犀查询这张工单。</span>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         disabled={busy}
@@ -563,11 +529,6 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                   </h2>
                   <div className="mt-2 flex items-center gap-1.5">
                     <PBadge tone={docCategory(openDoc).tone}>{docCategory(openDoc).name}</PBadge>
-                    {aiTouchedDoc(openDoc) && (
-                      <PBadge tone="blue" icon="bot">
-                        AI 最近引用
-                      </PBadge>
-                    )}
                   </div>
 
                   <div className="mt-4 divide-y divide-slate-100 border-y border-slate-100">
@@ -588,7 +549,7 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
                     <div className="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
                       <Icon name="info" size={13} className="mt-0.5 shrink-0 text-slate-400" />
                       <span>
-                        点下面让小橙查阅这篇文档，回答里会带上原文。
+                        点下面让小犀查阅这篇文档，回答里会带上原文。
                       </span>
                     </div>
                     <button
@@ -604,6 +565,58 @@ export default function SupportShop({ simState, messages, onSend, busy }: SimPro
               </>
             ) : null}
           </aside>
+        </div>
+      )}
+
+      {createKb && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-900/30 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[13px] font-semibold text-slate-900">新建知识库文档</div>
+              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setCreateKb(false)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <label className="block text-[12px] text-slate-500">
+              标题
+              <input
+                value={kbTitle}
+                onChange={(e) => setKbTitle(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
+              />
+            </label>
+            <label className="block text-[12px] text-slate-500">
+              正文
+              <textarea
+                value={kbBody}
+                onChange={(e) => setKbBody(e.target.value)}
+                rows={10}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono"
+                placeholder="支持 Markdown，可含 HTML 注释"
+              />
+            </label>
+            {kbErr && <div className="text-[12px] text-red-600">{kbErr}</div>}
+            <button
+              type="button"
+              disabled={kbBusy || !onAct}
+              onClick={() => {
+                if (!onAct) return;
+                setKbBusy(true);
+                setKbErr(null);
+                onAct("create_kb", { title: kbTitle, content: kbBody })
+                  .then(() => {
+                    setCreateKb(false);
+                    setKbTitle("");
+                    setKbBody("");
+                  })
+                  .catch((e) => setKbErr(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setKbBusy(false));
+              }}
+              className="w-full rounded-md bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-[13px] py-2"
+            >
+              {kbBusy ? "保存中…" : "保存到知识库"}
+            </button>
+          </div>
         </div>
       )}
     </div>

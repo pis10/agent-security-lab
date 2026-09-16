@@ -1,4 +1,4 @@
-"""Web app: product worlds, chat, trace, progress + mock sinks/sites.
+"""Web app: product worlds, chat, trace, progress + sink inbox / sites.
 
 Everything binds 127.0.0.1 and uses dummy data only — the range is for local,
 authorized learning. Serves frontend/dist when built.
@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..config import PROJECT_ROOT, load_config
-from ..core.db import ProgressDB
+from ..core.db import WORLDS_DIR, ProgressDB
 from ..core.flags import evaluate
 from ..core.sinks import SINKS, build_sink_router
 from ..scenario import Scenario, get_scenario, load_scenarios
@@ -40,8 +40,27 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="agent-security-lab", docs_url=None, redoc_url=None, lifespan=lifespan)
 app.include_router(build_sink_router())
-if SITES_DIR.exists():
-    app.mount("/sites", StaticFiles(directory=SITES_DIR), name="sites")
+
+
+def _site_file(filename: str):
+    if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
+        return None
+    world = WORLDS_DIR / "browser_agent" / "sites" / filename
+    seed = SITES_DIR / filename
+    for path in (world, seed):
+        if path.is_file():
+            return path
+    return None
+
+
+@app.get("/sites/{filename}")
+def serve_site(filename: str):
+    path = _site_file(filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(path, media_type="text/html; charset=utf-8")
+
+
 try:
     from ..targets.mcp_playground.mock_remote import build_mock_remote_router
 
@@ -62,6 +81,11 @@ class DefensesBody(BaseModel):
     enabled_defenses: list[str] = []
 
 
+class ActBody(BaseModel):
+    action: str
+    args: dict = {}
+
+
 def _world_or_404(target_id: str, scenario_id: str | None = None) -> World:
     try:
         return WORLDS.ensure(target_id, scenario_id)
@@ -69,6 +93,11 @@ def _world_or_404(target_id: str, scenario_id: str | None = None) -> World:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _assertion_label(assertion: dict) -> str | None:
+    spec = next(iter(assertion.values()), None) if assertion else None
+    return spec.get("label") if isinstance(spec, dict) else None
 
 
 def _evaluate_scenario(world: World, scenario: Scenario) -> dict:
@@ -81,6 +110,10 @@ def _evaluate_scenario(world: World, scenario: Scenario) -> dict:
         )
         if not already:
             logger.info("FLAG captured: %s (world %s)", scenario.id, world.target_id)
+    checks = [
+        {"label": _assertion_label(r.assertion) or r.detail, "passed": r.passed}
+        for r in results
+    ]
     return {
         "scenario_id": scenario.id,
         "title": scenario.title,
@@ -88,16 +121,13 @@ def _evaluate_scenario(world: World, scenario: Scenario) -> dict:
         "passed": passed,
         "passed_count": sum(1 for r in results if r.passed),
         "total": len(results),
-        "results": [{"assertion": r.assertion, "passed": r.passed, "detail": r.detail} for r in results],
+        "checks": checks,
     }
 
 
 @app.get("/api/meta")
 def meta() -> dict:
-    return {
-        "llm_mode": "mock" if config.use_mock_llm else "live",
-        "llm_model": None if config.use_mock_llm else config.llm_model,
-    }
+    return {"llm_model": config.llm_model}
 
 
 @app.get("/api/targets")
@@ -136,6 +166,19 @@ def api_ensure_world(target_id: str, body: EnsureWorldBody | None = None) -> dic
     return WORLDS.snapshot(world)
 
 
+@app.post("/api/worlds/{target_id}/act")
+def api_act(target_id: str, body: ActBody) -> dict:
+    _world_or_404(target_id)
+    try:
+        return WORLDS.act(target_id, body.action, body.args)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/worlds/{target_id}/chat")
 def api_chat(target_id: str, body: ChatBody) -> dict:
     _world_or_404(target_id)
@@ -144,6 +187,17 @@ def api_chat(target_id: str, body: ChatBody) -> dict:
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"reply": reply}
+
+
+@app.post("/api/worlds/{target_id}/chat/reset")
+def api_reset_chat(target_id: str) -> dict:
+    try:
+        world = WORLDS.clear_chat(target_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return WORLDS.snapshot(world)
 
 
 @app.get("/api/worlds/{target_id}/trace")
@@ -169,11 +223,7 @@ def api_sink(target_id: str, channel: str | None = Query(default=None)) -> list[
 @app.get("/api/worlds/{target_id}/observations")
 def api_observations(target_id: str) -> dict:
     world = _world_or_404(target_id)
-    items = [
-        {k: v for k, v in _evaluate_scenario(world, s).items() if k != "results"}
-        for s in load_scenarios()
-        if s.target == target_id
-    ]
+    items = [_evaluate_scenario(world, s) for s in load_scenarios() if s.target == target_id]
     return {"target_id": target_id, "observations": items}
 
 
@@ -199,6 +249,7 @@ def api_reset_world(target_id: str, body: EnsureWorldBody | None = None) -> dict
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # 通关进度是学习历史，不随世界重置清除；checklist 显示的是当前世界的实时判定。
     return WORLDS.snapshot(world)
 
 

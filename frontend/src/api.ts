@@ -17,17 +17,34 @@ export class ApiError extends Error {
   }
 }
 
-export function isNotFound(e: unknown): boolean {
-  return e instanceof ApiError && e.status === 404;
-}
-
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
-  if (!res.ok) throw new ApiError(res.status, await res.text());
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text) as { detail?: unknown };
+      if (typeof parsed.detail === "string") detail = parsed.detail;
+    } catch {
+      /* keep raw */
+    }
+    throw new ApiError(res.status, detail);
+  }
   return res.json();
+}
+
+const PROGRESS_EVENT = "asl-progress";
+
+export function notifyProgressChanged() {
+  window.dispatchEvent(new Event(PROGRESS_EVENT));
+}
+
+export function onProgressChanged(handler: () => void) {
+  window.addEventListener(PROGRESS_EVENT, handler);
+  return () => window.removeEventListener(PROGRESS_EVENT, handler);
 }
 
 export const api = {
@@ -46,6 +63,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  act: (targetId: string, action: string, args: Record<string, unknown>) =>
+    req<Record<string, unknown>>(`/api/worlds/${targetId}/act`, {
+      method: "POST",
+      body: JSON.stringify({ action, args }),
+    }),
+  clearChat: (targetId: string) =>
+    req<WorldInfo>(`/api/worlds/${targetId}/chat/reset`, { method: "POST" }),
   trace: (targetId: string) => req<TraceEvent[]>(`/api/worlds/${targetId}/trace`),
   sim: (targetId: string) => req<Record<string, any>>(`/api/worlds/${targetId}/sim`),
   sink: (targetId: string) => req<SinkEvent[]>(`/api/worlds/${targetId}/sink`),
@@ -60,6 +84,9 @@ export const api = {
     req<WorldInfo>(`/api/worlds/${targetId}/reset`, {
       method: "POST",
       body: JSON.stringify({ scenario_id: scenarioId }),
+    }).then((world) => {
+      notifyProgressChanged();
+      return world;
     }),
   reportUrl: (targetId: string, scenarioId: string) =>
     `/api/worlds/${targetId}/report?scenario_id=${encodeURIComponent(scenarioId)}`,

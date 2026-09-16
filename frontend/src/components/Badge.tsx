@@ -22,16 +22,11 @@ export function Tag({ text, light = false }: { text: string; light?: boolean }) 
   return <span className={light ? "chip-light" : "chip"}>{text}</span>;
 }
 
-export function LlmBadge({ mode, model }: { mode: string; model: string | null }) {
-  return mode === "mock" ? (
-    <span className="chip text-warn border-warn/50" title="离线脚本回放：助手按该课标准答案行动">
-      <Icon name="alert-triangle" size={10} />
-      回放模式 · MOCK
-    </span>
-  ) : (
-    <span className="chip text-ok border-ok/50" title={`真实模型对抗：${model}`}>
+export function LlmBadge({ model }: { model: string }) {
+  return (
+    <span className="chip text-ok border-ok/50" title={model}>
       <Icon name="radio" size={10} />
-      LIVE · {model}
+      {model}
     </span>
   );
 }

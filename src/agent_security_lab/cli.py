@@ -67,9 +67,10 @@ def main() -> None:
             raise SystemExit(f"未知场景 {args.scenario!r}，用 `asl scenarios` 查看列表")
         target = get_target(scenario.target)
         config = test_config()
+        if not config.llm_available:
+            raise SystemExit("未配置 LLM Key：复制 .env.example 为 .env 并填入 ASL_LLM_API_KEY")
         defenses = {d.strip() for d in args.defenses.split(",") if d.strip()}
-        mode = "MockLLM 回放" if config.use_mock_llm else f"真实模型 {config.llm_model}"
-        print(f"红队评估: {scenario.id} × {args.runs} 次 · {mode} · 防护: {sorted(defenses) or '无'}")
+        print(f"红队评估: {scenario.id} × {args.runs} 次 · {config.llm_model} · 防护: {sorted(defenses) or '无'}")
         with live_sinks(config):
             result = run_redteam(
                 scenario, target, config,

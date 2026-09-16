@@ -7,7 +7,6 @@ import McpMarket from "./McpMarket";
 import OpsConsole from "./OpsConsole";
 import SupportShop from "./SupportShop";
 
-/** Fallback while a target has no dedicated sim UI. */
 function SimPlaceholder({ messages, onSend, busy }: SimProps) {
   return (
     <div className="h-full flex flex-col items-center justify-center gap-4 p-8">

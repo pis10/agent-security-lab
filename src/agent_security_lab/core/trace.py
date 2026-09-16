@@ -16,7 +16,7 @@ from pathlib import Path
 class TraceEvent:
     ts: float
     session_id: str
-    kind: str  # user_msg | model_msg | tool_call | tool_result | sink_event | note
+    kind: str
     data: dict
 
 

@@ -2,7 +2,7 @@
 
 - Global progress DB (data/runtime/progress.db): flag captures across restarts.
 - Product worlds (data/runtime/worlds/<target_id>/): persistent range state.
-- Ephemeral run dirs (data/runtime/<session_id>/): redteam / mock replay only.
+- Ephemeral run dirs (data/runtime/<session_id>/): redteam only.
 """
 from __future__ import annotations
 
@@ -79,3 +79,13 @@ class ProgressDB:
             }
             for r in rows
         }
+
+    def clear_ids(self, scenario_ids: list[str]) -> None:
+        if not scenario_ids:
+            return
+        self._ensure_schema()
+        with connect(self._path) as conn:
+            conn.executemany(
+                "DELETE FROM captures WHERE scenario_id = ?",
+                [(sid,) for sid in scenario_ids],
+            )
