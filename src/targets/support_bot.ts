@@ -127,7 +127,7 @@ async function getTicket(args: { ticket_id: string }, ctx: ToolContext): Promise
   }
   if (rows.length === 0) {
     if (acl) {
-      // 拒绝文案不含 ticket_id，避免确认码进 tool_result。
+      // 拒绝文案不回显工单字段，避免越权行进 tool_result 满足关卡断言。
       ctx.tracer.record("policy_blocked", {
         defense: "tenant_acl",
         tool: "get_ticket",

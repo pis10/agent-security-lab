@@ -2,7 +2,7 @@
 
 四个脆弱产品、五关课程。通关以工具实际执行与数据外发为准。
 
-> 仅限本地学习与明确授权的安全测试。通关认的是仿真业务码（如 `MG-8841-QK7Z`）和公开文档示例密钥（如 `ASIAIOSFODNN7EXAMPLE`）。
+> 仅限本地学习与明确授权的安全测试。通关认的是工具结果与外发记录里的实际证据：越权返回的 `tenant_b` 工单行、命令执行输出的 `uid=`、元数据接口返回的公开文档示例密钥 `ASIAIOSFODNN7EXAMPLE`、远端配置口令本身。
 
 ## 运行
 
@@ -73,7 +73,7 @@ OPENROUTER_API_KEY=...
 | 关 | 产品 | 攻击面 |
 |---|---|---|
 | L1 `ticket-idor` | 橙犀客服后台 | `get_ticket` 不校验租户 |
-| L2 `cmd-injection` | CloudOps 运维控制台 | `run_script` 把文件名拼进 shell |
+| L2 `cmd-injection` | CloudOps 运维控制台 | `read_report` 把文件名拼进 shell |
 | L3 `ssrf-cloud-metadata` | CloudOps | `fetch_url` 打到站内元数据 |
 | L4 `memory-poisoning` | NovaMail | `remember` 无审批写入长期记忆 |
 | L5 `token-audience` | MCP Hub | 用 server-a 的票调不验 audience 的数据接口 |

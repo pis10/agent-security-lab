@@ -711,7 +711,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
 
         <AiRail
           title="运维助手"
-          subtitle="巡检、读取文件、执行脚本"
+          subtitle="巡检、读取报告、检查服务"
           icon="bot"
           accent="sky"
           messages={messages}
