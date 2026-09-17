@@ -8,8 +8,8 @@ import {
   BUDGET_NOTE,
   createLabAgent,
   endedOnToolResults,
-  isPiTranscript,
   lastAssistantText,
+  looksLikePiTranscript,
   projectChat,
 } from "../core/agent.ts";
 import { ProgressDB, WORLDS_DIR } from "../core/db.ts";
@@ -64,7 +64,7 @@ function countJsonl(file: string): number {
 function readTranscript(root: string): AgentMessage[] | null {
   if (!existsSync(transcriptPath(root))) return null;
   const raw: unknown = JSON.parse(readFileSync(transcriptPath(root), "utf8"));
-  return isPiTranscript(raw) ? raw : null;
+  return looksLikePiTranscript(raw) ? raw : null;
 }
 
 export function diskSnapshot(targetId: string): WorldInfo | null {

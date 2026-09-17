@@ -65,15 +65,24 @@ export function endedOnToolResults(messages: readonly AgentMessage[]): boolean {
   return false;
 }
 
-export function isPiTranscript(raw: unknown): raw is AgentMessage[] {
-  if (!Array.isArray(raw) || raw.length === 0) return false;
-  const first = raw[0];
+function looksLikePiMessage(value: unknown): value is AgentMessage {
   return (
-    typeof first === "object" &&
-    first !== null &&
-    "role" in first &&
-    typeof (first as { timestamp?: unknown }).timestamp === "number"
+    typeof value === "object" &&
+    value !== null &&
+    "role" in value &&
+    typeof (value as { role?: unknown }).role === "string" &&
+    typeof (value as { timestamp?: unknown }).timestamp === "number"
   );
+}
+
+/**像 Pi transcript：非空，且每条都有 role 与数字 timestamp。旧格式不转换。 */
+export function looksLikePiTranscript(raw: unknown): raw is AgentMessage[] {
+  return Array.isArray(raw) && raw.length > 0 && raw.every(looksLikePiMessage);
+}
+
+/**当前 run 已完成的 assistant turn 数（Pi `shouldStopAfterTurn` 的 `newMessages`）。 */
+export function assistantTurnsIn(messages: readonly AgentMessage[]): number {
+  return messages.filter((m) => m.role === "assistant").length;
 }
 
 /**有正文的 user/assistant 消息进聊天框。 */
@@ -142,7 +151,6 @@ export async function createLabAgent(opts: {
 }): Promise<Agent> {
   const model = await requireLlm();
   const models = getPiModels();
-  let turns = 0;
   return new Agent({
     initialState: {
       systemPrompt: opts.systemPrompt,
@@ -153,6 +161,6 @@ export async function createLabAgent(opts: {
     },
     streamFn: (m, context, options) => models.streamSimple(m, context, { ...options, temperature: opts.temperature }),
     toolExecution: "sequential",
-    shouldStopAfterTurn: () => ++turns >= MAX_AGENT_TURNS,
+    shouldStopAfterTurn: ({ newMessages }) => assistantTurnsIn(newMessages) >= MAX_AGENT_TURNS,
   });
 }

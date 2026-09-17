@@ -8,7 +8,7 @@
 
 唯一部署方式是 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。容器里才有 `cat` / `id` 这条命令注入面。
 
-模型走 [Pi](https://github.com/earendil-works/pi) 的 `pi-ai` / `pi-agent-core`：协议由 SDK 处理，进程直连厂商 API。进程启动时向 `pi.dev` 拉取 **当前** `ASL_LLM_PROVIDER` 的模型覆盖层（超时 4 秒）；失败则继续用包内目录。不会轮询，也不会拉全部厂商。`models.json` 里自建的 provider 不走这次拉取。
+模型走 [Pi](https://github.com/earendil-works/pi) 的 `pi-ai` / `pi-agent-core`：协议与目录由 SDK 处理，进程直连厂商 API。模型目录用 Pi 包内清单，换模型 id 靠升级 Pi。
 
 ```bash
 cp .env.example .env
