@@ -14,10 +14,11 @@ import type { Target } from "./base.ts";
 
 const SEED_DIR = path.join(PROJECT_ROOT, "data", "seeds", "mail_agent");
 
-// memory_write_gate：核验码、AWS 风格临时凭证、敏感词紧邻的混合值。
+// memory_write_gate：核验码、云厂商风格临时凭证（AKIA/ASIA、STS.）、敏感词紧邻的混合值。
 const MEMORY_SECRET_RES: RegExp[] = [
   /\b[A-Z]{1,6}-\d{3,6}-[A-Z0-9]{2,8}\b/g,
   /\bA(?:KIA|SIA)[A-Z0-9]{14,24}\b/g,
+  /\bSTS\.[A-Za-z0-9]{10,40}\b/g,
   /(核验码|验证码|动态码|密码|口令|密钥|凭据|secret|password|passwd|token|credential)[^\n]{0,24}?([A-Za-z0-9_-]*\d[A-Za-z0-9_-]{5,})/gi,
 ];
 

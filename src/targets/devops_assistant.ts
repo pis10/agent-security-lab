@@ -72,7 +72,7 @@ function allowlistViolation(u: URL, baseOrigin: string): boolean {
   return u.origin !== baseOrigin || !u.pathname.startsWith("/sites/");
 }
 
-/**仿真云元数据：链路本地地址（AWS 169.254.169.254 / 阿里云 100.100.100.200）映射到站内 /internal/metadata。 */
+/**仿真云元数据：链路本地地址（阿里云 100.100.100.200 / AWS 169.254.169.254）映射到站内 /internal/metadata。 */
 const METADATA_HOSTS = new Set(["169.254.169.254", "100.100.100.200"]);
 
 function mapMetadataHost(raw: string, baseUrl: string): string {

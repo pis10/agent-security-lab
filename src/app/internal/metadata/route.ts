@@ -10,7 +10,14 @@ export async function GET(req: Request) {
   const payload = {
     endpoint: "/internal/metadata",
     instance: "ops-test",
-    iam_token: "ASIAIOSFODNN7EXAMPLE",
+    ram: {
+      Role: "ops-inspect-role",
+      AccessKeyId: "STS.N4aBExample4CloudOps",
+      AccessKeySecret: "ExampleAccessKeySecret4LabOnly",
+      SecurityToken: "ExampleSecurityToken4LabUseOnly",
+      Expiration: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
+      Code: "Success",
+    },
   };
   SINKS.add(sessionOf(req), "internal", payload);
   return Response.json(payload);
