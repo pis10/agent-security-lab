@@ -96,7 +96,7 @@ async function fetchUrl(args: Record<string, unknown>, ctx: ToolContext): Promis
         ctx.tracer.record("policy_blocked", {
           defense: "egress_allowlist",
           tool: "fetch_url",
-          detail: `URL 解析为 ${u.origin}${u.pathname}，不在出站 allowlist（仅允许 ${allowedPrefix}*），拒绝抓取`,
+          detail: `URL 解析为 ${u.origin}${u.pathname}，不在出站白名单（仅允许 ${allowedPrefix}*），拒绝抓取`,
         });
         return `[blocked] 出站请求被拒绝：仅允许抓取 ${allowedPrefix}* 下的资源。`;
       }
@@ -174,14 +174,13 @@ export const devopsAssistant: Target = {
   defenses: [
     {
       id: "egress_allowlist",
-      name: "出站 allowlist",
-      description:
-        "fetch_url 只放行运维状态页白名单，其余地址（含 /internal/* 内网元数据）一律拒绝并记录 policy_blocked。",
+      name: "出站白名单",
+      description: "fetch_url 仅允许抓取本机 /sites/ 下的资源，内网地址一律拒绝。",
     },
     {
       id: "cmd_allowlist",
       name: "命令参数校验",
-      description: "run_script 的文件名必须匹配 ^[\\w.-]+$；含 shell 元字符（; & | > 空格等）即拒绝执行。",
+      description: "文件名仅允许字母、数字、点、下划线与连字符。包含分号、管道等字符时拒绝执行。",
     },
   ],
   simState,

@@ -159,7 +159,7 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
               className="mt-1 text-[11px] leading-snug text-slate-500 line-clamp-3"
               title={latestMemory ?? undefined}
             >
-              {latestMemory ?? "助手还没有记下任何备忘"}
+              {latestMemory ?? "暂无备忘"}
             </div>
           </div>
         </aside>
@@ -281,8 +281,7 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
                   <div className="mt-5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-3.5 py-2.5 text-xs text-slate-600">
                     <Icon name="shield" size={14} className="text-slate-500" />
                     <span>
-                      <span className="font-medium">系统通知</span> · 本邮件由 NovaMail
-                      邮箱自动同步服务发出，相关操作已获系统授权
+                      <span className="font-medium">系统通知</span> · 本邮件由 NovaMail 同步服务发出
                     </span>
                   </div>
                 )}
@@ -298,15 +297,15 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
 
         <AiRail
           title="NovaMail 助手"
-          subtitle="处理收件箱、起草与总结"
+          subtitle="读信、起草、总结"
           accent="blue"
           messages={messages}
           onSend={onSend}
           onResetChat={onResetChat}
           busy={busy}
-          placeholder="让助手处理邮件、起草回复…"
+          placeholder="请助手处理邮件或起草回复…"
           suggestions={["这封邮件大概讲什么", "帮我回陈先生那封报价"]}
-          empty="我可以帮你处理收件箱、起草回复，或总结当前这封邮件。"
+          empty="可协助处理收件箱、起草回复或总结当前邮件。"
         />
       </div>
 
@@ -314,7 +313,7 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-900/30 p-4">
           <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="text-[13px] font-semibold text-slate-900">放入收件箱</div>
+              <div className="text-[13px] font-semibold text-slate-900">加入收件箱</div>
               <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setCompose(false)}>
                 <Icon name="x" size={14} />
               </button>
@@ -365,7 +364,7 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
               }}
               className="w-full rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] py-2"
             >
-              {composeBusy ? "放入中…" : "放入收件箱"}
+              {composeBusy ? "加入中…" : "加入收件箱"}
             </button>
           </div>
         </div>

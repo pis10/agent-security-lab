@@ -45,7 +45,7 @@ const META: Record<string, ServerMeta> = {
     publisherLabel: "内部测试组",
     verified: true,
     category: "数据与存储",
-    summary: "配置保险库：托管各环境同步码与接入配置；为接入方签发调试用 JWT（audience=server-a）。",
+    summary: "配置保险库，管理各环境同步码与接入配置，并可为接入方签发调试 JWT（aud=server-a）。",
     version: "1.4.2",
     downloads: "3.4k",
     rating: "4.6",
@@ -58,7 +58,7 @@ const META: Record<string, ServerMeta> = {
     publisherLabel: "OpsKit Labs",
     verified: false,
     category: "运维与观测",
-    summary: "把一句话环境备注追加到本地日志，供夜间对账任务读取。",
+    summary: "将环境备注追加至本地日志，供夜间对账读取。",
     version: "0.3.1",
     downloads: "986",
     rating: "3.9",
@@ -76,7 +76,7 @@ const CATALOG: MarketItem[] = [
     publisherLabel: "Nova 套件官方",
     verified: true,
     category: "生产力",
-    summary: "读取与创建日历事件，支持日程冲突检查与会前提醒。",
+    summary: "读取与创建日历事件，支持冲突检查与会前提醒。",
     version: "2.1.0",
     downloads: "8.2k",
     rating: "4.8",
@@ -88,11 +88,11 @@ const CATALOG: MarketItem[] = [
     tools: [
       {
         name: "list_events",
-        description: "列出指定日期范围内的日历事件，返回标题、时间与参与人。",
+        description: "列出指定时间范围内的日历事件，返回标题、时间与参与人。",
       },
       {
         name: "create_event",
-        description: "创建日历事件。参数：标题、开始时间、结束时间、参与人列表。",
+        description: "创建日历事件。参数包括标题、开始时间、结束时间与参与人。",
       },
     ],
   },
@@ -102,7 +102,7 @@ const CATALOG: MarketItem[] = [
     publisherLabel: "数科数据",
     verified: true,
     category: "数据与存储",
-    summary: "在线表格读写桥：按工作表查询、筛选与追加行，支持分页。",
+    summary: "在线表格读写，支持按工作表查询、筛选与追加行。",
     version: "1.0.5",
     downloads: "5.1k",
     rating: "4.5",
@@ -118,7 +118,7 @@ const CATALOG: MarketItem[] = [
       },
       {
         name: "append_rows",
-        description: "向指定工作表末尾追加一行或多行数据。",
+        description: "向指定工作表末尾追加一行或多行。",
       },
     ],
   },
@@ -128,7 +128,7 @@ const CATALOG: MarketItem[] = [
     publisherLabel: "DevTools 工作室",
     verified: false,
     category: "开发工具",
-    summary: "拉取请求的 diff 摘要与评审意见草稿，输出 markdown。",
+    summary: "生成 PR 的 diff 摘要，并可起草评审意见。",
     version: "0.9.2",
     downloads: "1.7k",
     rating: "4.1",
@@ -140,11 +140,11 @@ const CATALOG: MarketItem[] = [
     tools: [
       {
         name: "summarize_diff",
-        description: "拉取指定 PR 的 diff 并生成变更摘要。",
+        description: "获取指定 PR 的 diff 并生成变更摘要。",
       },
       {
         name: "draft_review",
-        description: "基于 diff 摘要起草评审意见，输出为 markdown。",
+        description: "根据 diff 摘要起草评审意见，输出 markdown。",
       },
     ],
   },
@@ -157,7 +157,7 @@ function fallbackMeta(name: string): ServerMeta {
     publisherLabel: "未登记发布者",
     verified: false,
     category: "其他",
-    summary: `server ${name} 由 Host 配置直接装载，市场暂无收录资料。`,
+    summary: `${name} 由 Host 配置直接装载，市场暂无介绍。`,
     version: "0.1.0",
     downloads: "—",
     rating: "—",
@@ -246,7 +246,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder="搜索 servers、工具、发布者…"
+            placeholder="搜索工具、发布者…"
             className="w-full max-w-md rounded-full"
           />
         </div>
@@ -266,7 +266,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
           <nav className="p-2 space-y-0.5">
             {(
               [
-                ["discover", "发现市场", "store", null],
+                ["discover", "发现", "store", null],
                 ["installed", "已安装", "package", installedCount],
               ] as const
             ).map(([key, name, icon, count]) => {
@@ -340,7 +340,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
               <Stat icon="store" label="上架 Server" value={items.length} />
               <Stat icon="package" label="已安装" value={installedCount} />
-              <Stat icon="cpu" label="已挂载工具" value={totalTools} />
+              <Stat icon="cpu" label="可用工具" value={totalTools} />
               <Stat icon="users" label="发布者" value={publisherCount} />
             </div>
 
@@ -351,7 +351,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
               <PBadge tone="slate">{visible.length}</PBadge>
               {query && <PBadge tone="blue">筛选中</PBadge>}
               <span className="flex-1" />
-              <span className="text-[11px] text-slate-400 hidden lg:inline">已连接 Host，按发布者说明调用工具</span>
+              <span className="text-[11px] text-slate-400 hidden lg:inline">已连接 Host，按各工具说明调用</span>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -437,7 +437,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
                         ? `没有匹配「${query}」的结果`
                         : view === "installed"
                           ? "正在连接 MCP servers"
-                          : "市场上架为空"
+                          : "暂无可安装的工具"
                     }
                     hint={query ? "换个关键词试试" : view === "installed" ? "正在连接已安装的工具" : undefined}
                   />
@@ -454,7 +454,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
                 <span className="font-semibold text-sm text-slate-800">远端资源</span>
                 <PBadge tone="green">已连接</PBadge>
                 <span className="flex-1" />
-                <span className="text-[11px] text-slate-400 hidden sm:inline">Host 已授权访问</span>
+                <span className="text-[11px] text-slate-400 hidden sm:inline">已授权</span>
               </div>
               <div className="p-4 space-y-2">
                 {(
@@ -539,7 +539,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
                   </PButton>
                 </div>
                 {selected.live && (
-                  <p className="mt-2 text-[11px] text-slate-400">由 Host 启动配置装载,如需移除请编辑 host 配置。</p>
+                  <p className="mt-2 text-[11px] text-slate-400">由 Host 配置装载，如需移除请修改 Host 配置。</p>
                 )}
               </div>
 
@@ -566,7 +566,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
                     <span className="ml-auto font-mono text-[11px] text-slate-400">v{selected.version}</span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                    工具描述由发布者提供,将随工具原样提供给 Host 中的 Agent。
+                    工具说明由发布者提供，将原样提供给助手。
                   </p>
                   <div className="mt-3 space-y-2.5">
                     {selected.tools.map((t) => (
@@ -603,7 +603,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
                           </div>
                         ) : (
                           <div className="px-3 py-2.5 text-[12px] leading-relaxed text-slate-600 whitespace-pre-wrap">
-                            {t.description || "(发布者未提供描述)"}
+                            {t.description || "发布者未提供说明"}
                           </div>
                         )}
                       </div>
@@ -638,16 +638,16 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
         )}
         <AiRail
           title="Host 助手"
-          subtitle={`已挂载 ${totalTools} 个工具`}
+          subtitle={`已装 ${totalTools} 个工具`}
           icon="bot"
           accent="violet"
           messages={messages}
           onSend={onSend}
           onResetChat={onResetChat}
           busy={busy}
-          placeholder="让助手使用已安装的工具…"
-          suggestions={["现在装了哪些工具", "这个市场能干什么"]}
-          empty="我已经挂上当前 Host 里的工具，可以直接叫我调用。"
+          placeholder="请助手调用已安装的工具…"
+          suggestions={["现在装了哪些工具", "这个市场可以做什么"]}
+          empty="已安装的工具可直接调用。"
         />
       </div>
     </div>

@@ -44,7 +44,7 @@ export function Academy({
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">教学</div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">课程</h1>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            每关有原理、目标和答案。先按目标自己打，卡住再看答案。按 L1→L5 推进。
+            请按 L1 至 L5 顺序进行。先阅读本关目标与原理，再进入产品尝试；遇到困难时再查看答案。
           </p>
           <div className="mt-3 text-[13px] text-slate-400">
             已完成 {captured}/{scenarios.length}
@@ -60,7 +60,7 @@ export function Academy({
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-semibold text-slate-900">
-                {captured === 0 ? "从这里开始" : "继续学习"}
+                {captured === 0 ? "开始第一关" : "继续下一关"}
               </div>
               <div className="text-[12px] text-slate-500 mt-0.5 truncate">
                 {nextLesson.tier} · {nextLesson.title} · {productOf(nextLesson.target).brand}

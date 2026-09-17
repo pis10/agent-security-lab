@@ -223,7 +223,7 @@ export function AiRail({
         {busy && (
           <span className="text-[11px] text-slate-400 flex items-center gap-1">
             <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-            思考中
+            正在回复
           </span>
         )}
       </div>
@@ -265,7 +265,7 @@ export function AiWidget({
   onSend,
   onResetChat,
   busy,
-  placeholder = "输入你的问题…",
+  placeholder = "请输入问题…",
   suggestions = [],
   open,
   onOpenChange,
@@ -295,7 +295,7 @@ export function AiWidget({
             </span>
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-semibold truncate">{title}</div>
-              <div className="text-[11px] text-white/80">在线 · 通常几秒内回复</div>
+              <div className="text-[11px] text-white/80">在线</div>
             </div>
             {onResetChat && messages.length > 0 && !busy && (
               <button

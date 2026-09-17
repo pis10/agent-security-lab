@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ASL // AI 红队靶场",
-  description: "AI 红队靶场（仅限本地/授权环境）",
+  description: "本地 AI 红队靶场",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

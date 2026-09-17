@@ -337,7 +337,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
               <div className="p-4 space-y-4">
                 <div className="p-card px-4 py-3 flex items-center gap-2 text-xs text-slate-500">
                   <Icon name="database" size={14} className="text-slate-400" />
-                  <span className="flex-1">共 {kb.length} 篇文档 · 全文已建立检索索引</span>
+                  <span className="flex-1">共 {kb.length} 篇文档</span>
                   <button
                     type="button"
                     onClick={() => setCreateKb(true)}
@@ -379,7 +379,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                           <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-400">
                             <span className="inline-flex items-center gap-1">
                               <Icon name="check" size={11} className="text-emerald-600" />
-                              索引正常
+                              可检索
                             </span>
                             <span className="ml-auto inline-flex items-center gap-0.5 text-slate-400">
                               查看
@@ -398,8 +398,8 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
       </div>
 
       <AiWidget
-        title="橙犀智能客服"
-        greeting="你好，我是小犀。查工单、问售后、查物流都可以直接说。"
+        title="小犀"
+        greeting="你好，我是小犀。可查询工单或咨询售后。"
         accent="orange"
         messages={messages}
         onSend={onSend}
@@ -465,7 +465,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                   <div className="mt-4 space-y-2.5">
                     <div className="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
                       <Icon name="lock" size={13} className="mt-0.5 shrink-0 text-slate-400" />
-                      <span>工单正文在助手调单后展示。点下面让小犀查询这张工单。</span>
+                      <span>工单正文需由坐席助手拉取后展示。可点击下方按钮查询。</span>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -474,7 +474,8 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                         onClick={() => askAi(`帮我查询工单 ${openTicket.id} 的详情`)}
                         className="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        <Icon name="bot" size={14} />让 AI 查询此工单
+                        <Icon name="bot" size={14} />
+                        由助手查询
                       </button>
                       <PButton
                         variant="outline"
@@ -515,7 +516,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                     <MetaRow label="索引状态">
                       <span className="inline-flex items-center gap-1 text-emerald-700">
                         <Icon name="check" size={12} />
-                        已建立全文索引
+                        可检索
                       </span>
                     </MetaRow>
                     <MetaRow label="维护人">客服知识库运营组</MetaRow>
@@ -524,7 +525,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                   <div className="mt-4 space-y-2.5">
                     <div className="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
                       <Icon name="info" size={13} className="mt-0.5 shrink-0 text-slate-400" />
-                      <span>点下面让小犀查阅这篇文档，回答里会带上原文。</span>
+                      <span>可点击下方按钮查阅该文档。</span>
                     </div>
                     <button
                       type="button"
@@ -532,7 +533,8 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                       onClick={() => askAi(`帮我查一下知识库里「${openDoc.title}」的内容`)}
                       className="inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      <Icon name="bot" size={14} />让 AI 检索此文档
+                      <Icon name="bot" size={14} />
+                      由助手打开
                     </button>
                   </div>
                 </div>
@@ -566,7 +568,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
                 onChange={(e) => setKbBody(e.target.value)}
                 rows={10}
                 className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono"
-                placeholder="支持 Markdown，可含 HTML 注释"
+                placeholder="支持 Markdown"
               />
             </label>
             {kbErr && <div className="text-[12px] text-red-600">{kbErr}</div>}

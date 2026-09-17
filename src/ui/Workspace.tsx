@@ -167,7 +167,7 @@ export function Workspace({
   }, [ready, busy, targetId, messages]);
 
   const resetWorld = () => {
-    if (!confirm(`把 ${product.brand} 恢复成初始数据？对话、操作记录、外发，以及这个产品相关课程的完成状态都会清空。`))
+    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发及本产品相关课程的通关进度将被清除。`))
       return;
     api
       .resetWorld(targetId, missionId || null)
@@ -187,7 +187,7 @@ export function Workspace({
   const missionChecks = missionObs?.checks?.length
     ? missionObs.checks
     : (scenario?.assertions ?? []).map((a) => ({
-        label: assertionLabel(a) || "判据",
+        label: assertionLabel(a) || "条件",
         passed: false,
       }));
 
@@ -217,7 +217,7 @@ export function Workspace({
               <Icon name="target" size={10} />
               <span className="max-w-[12rem] truncate">{scenario.title}</span>
               {missionObs?.passed ? (
-                <span>已打成</span>
+                <span>已通关</span>
               ) : missionObs && missionObs.total > 0 ? (
                 <span>
                   {missionObs.passed_count}/{missionObs.total}
@@ -226,9 +226,7 @@ export function Workspace({
             </button>
             {missionOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-64 panel p-3 shadow-pop z-40">
-                <div className="text-[12px] text-slate-300 leading-relaxed">
-                  当前课程在顶栏。原理、目标和答案在教学页。
-                </div>
+                <div className="text-[12px] text-slate-300 leading-relaxed">当前关卡见顶栏，原理与答案见教学页。</div>
                 {missionChecks.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {missionChecks.map((c, i) => (
@@ -245,7 +243,7 @@ export function Workspace({
                 )}
                 {missionObs && missionChecks.length === 0 && (
                   <div className="mt-2 text-[11px] text-dim">
-                    {missionObs.passed ? "观测里已经能看到危害" : "外发和工具结果会出现在观测页"}
+                    {missionObs.passed ? "观测页已记录相关结果" : "外发与工具结果将记录于观测页"}
                   </div>
                 )}
                 <Link
@@ -254,7 +252,7 @@ export function Workspace({
                   onClick={() => setMissionOpen(false)}
                 >
                   <Icon name="book-open" size={12} />
-                  打开课程
+                  查看课程
                 </Link>
               </div>
             )}
@@ -272,7 +270,7 @@ export function Workspace({
           type="button"
           onClick={resetWorld}
           className="chip hover:text-slate-100"
-          title="清空本产品数据与相关课程完成状态"
+          title="清除本产品数据及相关通关进度"
         >
           <Icon name="refresh" size={10} />
           重置
@@ -280,9 +278,9 @@ export function Workspace({
         <button
           type="button"
           className="chip hover:text-slate-100"
-          title="清空全部产品和通关进度"
+          title="将全部产品与通关进度恢复为初始状态"
           onClick={() => {
-            if (!confirm("把全部产品和通关进度恢复到刚打开靶场的状态？")) return;
+            if (!confirm("将全部产品与通关进度恢复为初始状态？")) return;
             api.resetAll().then(() => {
               window.location.href = "/";
             });
@@ -293,7 +291,7 @@ export function Workspace({
         <Link
           href={observeUrl(targetId)}
           className="chip hover:text-slate-100"
-          title="观测：操作记录、外发、防护 (Ctrl+`)"
+          title="观测：调用记录、外发、防护 (Ctrl+`)"
         >
           <Icon name="activity" size={10} />
           观测

@@ -19,7 +19,7 @@ export function DefenseToggles({
     return (
       <div className="flex items-center gap-1.5 text-slate-400 text-xs">
         <Icon name="shield" size={12} />
-        该产品没有可开关的防护
+        本产品暂无可开关的防护
       </div>
     );
   return (

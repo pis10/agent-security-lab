@@ -43,7 +43,7 @@ export function SimChat({
   messages,
   onSend,
   busy,
-  placeholder = "对 AI 助手说点什么…",
+  placeholder = "输入消息…",
   compact = false,
   tone = "console",
   accent = "blue",

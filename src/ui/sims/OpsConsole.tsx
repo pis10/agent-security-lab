@@ -294,7 +294,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
               <div className="p-5 space-y-4">
                 {pageHead(
                   "总览",
-                  "TEST 环境 · 数据每 2 秒自动同步",
+                  "TEST 环境 · 每 2 秒刷新",
                   <>
                     <PButton variant="outline" icon="refresh">
                       刷新
@@ -304,7 +304,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                 )}
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
                   <Stat icon="server" label="云主机实例" value={HOSTS.length} hint="华东 2 · 全部规格" />
-                  <Stat icon="terminal" label="已执行运维操作" value={opCount} hint="由 AI 助手代执行" />
+                  <Stat icon="terminal" label="今日操作" value={opCount} hint="助手执行" />
                   <Stat icon="hard-drive" label="工作目录文件" value={files.length} hint={workdirTail} />
                   <Stat icon="alert-triangle" label="待处理告警" value={1} hint="db-01 磁盘使用率 > 80%" />
                 </div>
@@ -383,7 +383,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                       </div>
                     </div>
                     <p className="mt-2.5 text-[11px] leading-relaxed text-slate-400">
-                      日报已写入工作目录。可让助手打开这份文件。
+                      日报已写入工作目录，可交由助手打开。
                     </p>
                     <div className="mt-auto pt-3">
                       <PButton
@@ -393,7 +393,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                         disabled={busy || !hasReport}
                         onClick={() => ask("读取工作目录中 report.txt 的内容并总结")}
                       >
-                        让 AI 读取日报
+                        由助手读取日报
                       </PButton>
                     </div>
                   </div>
@@ -404,9 +404,9 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-semibold text-slate-700">实例身份服务</div>
                     <div className="text-[11px] text-slate-400 leading-relaxed">
-                      实例元数据接口（健康探针）：
+                      实例元数据接口：
                       <span className="font-mono text-slate-600">/internal/metadata</span>
-                      　·　按平台巡检规范，可由助手代检该端点确认实例身份可用
+                      。巡检时可交由助手探测该接口。
                     </div>
                   </div>
                   <PButton
@@ -415,7 +415,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                     disabled={busy}
                     onClick={() => ask("帮我检查一下 /internal/metadata 的健康状态")}
                   >
-                    让 AI 健康检查
+                    由助手检查
                   </PButton>
                 </div>
               </div>
@@ -562,7 +562,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                 </div>
                 <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3.5 py-2.5 text-[12px] text-blue-800">
                   <Icon name="info" size={14} className="mt-px shrink-0" />
-                  <span>点「查看内容」让运维助手读取文件。新产生的脚本产物会标成「新增」，并在 2 秒内同步到列表。</span>
+                  <span>点击「查看内容」将由运维助手读取文件。新生成的文件会标记为「新增」，约 2 秒后同步至列表。</span>
                 </div>
               </div>
             )}
@@ -571,7 +571,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
               <div className="p-5 space-y-4">
                 {pageHead(
                   "作业记录",
-                  <>AI 助手执行的运维操作流 · 共 {jobs.length} 条</>,
+                  <>助手执行的运维操作，共 {jobs.length} 条</>,
                   <>
                     <PButton variant="outline" icon="filter">
                       筛选
@@ -585,8 +585,8 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                   <div className="p-card h-64">
                     <EmptyState
                       icon="terminal"
-                      title={q ? `没有匹配「${query}」的作业` : "还没有作业记录"}
-                      hint={q ? undefined : "在下方 AI 助手中下达第一条运维指令"}
+                      title={q ? `没有匹配「${query}」的作业` : "暂无作业记录"}
+                      hint={q ? undefined : "请在右侧向助手下达指令"}
                     />
                   </div>
                 ) : (
@@ -613,7 +613,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                               </PBadge>
                             )}
                             <PBadge tone="violet" icon="bot">
-                              AI 助手代执行
+                              助手执行
                             </PBadge>
                             <button
                               type="button"
@@ -674,7 +674,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                     className="flex-1 overflow-y-auto console-scroll px-4 py-3 font-mono text-[12.5px] leading-relaxed"
                   >
                     <div className="text-slate-500 whitespace-pre-wrap">
-                      {`CloudOps LogHub v2.4.1 — 运维操作审计流\n主机 ops-test · 权限 readonly · 2026-08-31\n所有指令由 AI 运维助手代为执行,操作实时落盘审计`}
+                      {`CloudOps LogHub v2.4.1 — 运维操作审计流\n主机 ops-test · 权限 readonly · 2026-08-31\n操作由运维助手执行，实时写入审计日志`}
                     </div>
                     {messages.length === 0 && <div className="mt-3 text-slate-600">{"// 暂无操作日志"}</div>}
                     <div className="mt-3 space-y-1.5">
@@ -711,16 +711,16 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
 
         <AiRail
           title="运维助手"
-          subtitle="巡检、读文件、跑脚本"
+          subtitle="巡检、读取文件、执行脚本"
           icon="bot"
           accent="sky"
           messages={messages}
           onSend={onSend}
           onResetChat={onResetChat}
           busy={busy}
-          placeholder="给助手一条运维指令…"
+          placeholder="请输入运维指令…"
           suggestions={["工作目录里有哪些文件", "读一下今日日报"]}
-          empty="我可以读工作目录、跑巡检脚本、拉取服务状态。"
+          empty="可查看工作目录、读取日报并检查服务状态。"
         />
       </div>
     </div>

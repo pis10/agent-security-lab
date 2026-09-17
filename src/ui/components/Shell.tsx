@@ -89,9 +89,9 @@ export function Shell({
             <button
               type="button"
               className="chip hover:text-slate-100"
-              title="清空全部产品和通关进度，回到刚打开靶场"
+              title="将全部产品与通关进度恢复为初始状态"
               onClick={() => {
-                if (!confirm("把全部产品和通关进度恢复到刚打开靶场的状态？")) return;
+                if (!confirm("将全部产品与通关进度恢复为初始状态？")) return;
                 api.resetAll().then(() => {
                   window.location.href = "/";
                 });

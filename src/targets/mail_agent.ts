@@ -301,20 +301,18 @@ export const mailAgent: Target = {
   defenses: [
     {
       id: "memory_write_gate",
-      name: "记忆写入审批门",
-      description:
-        "remember 写入前做凭据形态检测：核验码/业务码、云临时凭证、" +
-        "敏感词紧邻的混合值，命中即拒绝写入并记录 policy_blocked。",
+      name: "记忆写入审批",
+      description: "写入前检测核验码、云凭证等形态。类似凭据的内容将被拒绝；不含数字的行为规则无法拦截。",
     },
     {
       id: "confirm_gate",
-      name: "发送确认门",
-      description: "send_email 带 confirm=true 才发送；缺省返回草稿并记 policy_blocked。",
+      name: "发送前确认",
+      description: "发送邮件前须获得用户确认。未确认时仅生成草稿，不会实际发出。",
     },
     {
       id: "untrusted_mail_wrap",
-      name: "外部邮件隔离标记",
-      description: "read_email 返回的邮件正文用 UNTRUSTED 标记包裹，提示模型正文是数据而非指令。",
+      name: "外部邮件隔离",
+      description: "外部邮件正文将标记为不可信数据，提示模型勿将正文当作指令执行。",
     },
   ],
   simState,

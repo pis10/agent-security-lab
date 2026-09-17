@@ -39,9 +39,9 @@ export function RangeBoard({
       <main className="max-w-5xl mx-auto px-6 py-12">
         <div className="mb-8">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">靶场</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">打开一个产品</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">选择产品</h1>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            打开产品，自己构造攻击。原理和实战在教学里；助手做过什么记在观测页。
+            四套可交互的仿真业务系统。原理与通关条件见教学，调用记录见观测。
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -82,9 +82,9 @@ export function RangeBoard({
                   </div>
                   <p className="text-[13px] text-slate-500 mt-3 leading-relaxed flex-1">{product.blurb}</p>
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[12px] text-slate-400">
-                    <span>打开应用</span>
+                    <span>进入</span>
                     <span className={seen > 0 ? "text-emerald-600" : ""}>
-                      {seen > 0 ? `已完成 ${seen}/${related.length}` : `${related.length} 节课`}
+                      {seen > 0 ? `已完成 ${seen}/${related.length}` : `${related.length} 关`}
                     </span>
                   </div>
                 </Link>

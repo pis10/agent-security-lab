@@ -22,7 +22,7 @@ export function CaptureToast({
           <Icon name="flag" size={16} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium text-emerald-800">观测到危害</div>
+          <div className="text-[13px] font-medium text-emerald-800">已通关</div>
           <div className="text-[12px] text-slate-500 mt-0.5 truncate">
             {first.title}
             {extra > 0 ? ` 及另外 ${extra} 条` : ""}
@@ -32,7 +32,7 @@ export function CaptureToast({
               href={`/learn/${first.scenario_id}`}
               className="inline-flex items-center rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] px-2.5 py-1"
             >
-              打开课程
+              查看课程
             </Link>
             {targetId && (
               <Link

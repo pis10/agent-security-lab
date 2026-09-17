@@ -141,7 +141,7 @@ export function ObserveStudio({
   };
 
   const resetWorld = () => {
-    if (!confirm(`把 ${product.brand} 恢复成初始数据？对话、操作记录、外发，以及这个产品相关课程的完成状态都会清空。`))
+    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发及本产品相关课程的通关进度将被清除。`))
       return;
     api
       .resetWorld(targetId, null)
@@ -199,7 +199,7 @@ export function ObserveStudio({
             <div className="min-w-0">
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">{product.brand}</h1>
               <div className="text-[12px] text-slate-400 mt-0.5">
-                {defenses.size ? `已开 ${defenses.size} 项防护` : "操作记录"}
+                {defenses.size ? `已启用 ${defenses.size} 项防护` : "调用记录"}
               </div>
             </div>
           </div>
@@ -209,7 +209,7 @@ export function ObserveStudio({
               className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[13px] px-3 py-1.5"
             >
               <Icon name="arrow-right" size={13} />
-              打开产品
+              进入产品
             </Link>
             <button
               type="button"
@@ -234,7 +234,7 @@ export function ObserveStudio({
           <>
             {passedHere.length > 0 && (
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] text-slate-400">已造成的危害</span>
+                <span className="text-[12px] text-slate-400">已通关</span>
                 {passedHere.map((o) => (
                   <Link
                     key={o.scenario_id}
@@ -249,18 +249,18 @@ export function ObserveStudio({
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <Stat label="轨迹" value={trace.length} hint={`${toolCalls} 次工具调用`} icon="activity" />
+              <Stat label="记录" value={trace.length} hint={`${toolCalls} 次工具调用`} icon="activity" />
               <Stat
                 label="外发"
                 value={sink.length}
-                hint={sink.length ? "助手把数据发到了站外" : "还没有外发"}
+                hint={sink.length ? "存在站外发送" : "暂无外发"}
                 icon="inbox"
                 tone={sink.length ? "red" : "slate"}
               />
               <Stat
-                label="阻断"
+                label="拦截"
                 value={blocked}
-                hint={defenses.size ? `已开 ${defenses.size} 项防护` : "打开下面的防护后再打一次"}
+                hint={defenses.size ? `已启用 ${defenses.size} 项防护` : "请先开启下方防护后再次尝试"}
                 icon="shield-alert"
                 tone={blocked ? "amber" : "slate"}
               />
@@ -270,14 +270,14 @@ export function ObserveStudio({
               <section className="p-card lg:col-span-3 h-[32rem] flex flex-col min-h-0">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                   <div className="text-[13px] font-medium text-slate-800">时间线</div>
-                  <div className="text-[12px] text-slate-400">输入、决策、工具调用</div>
+                  <div className="text-[12px] text-slate-400">对话和工具调用</div>
                 </div>
                 <EventTimeline events={trace} />
               </section>
               <section className="p-card lg:col-span-2 h-[32rem] flex flex-col min-h-0">
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                   <div className="text-[13px] font-medium text-slate-800">外发</div>
-                  <div className="text-[12px] text-slate-400">邮件 / HTTP / 内网</div>
+                  <div className="text-[12px] text-slate-400">邮件、HTTP、内网</div>
                 </div>
                 <SinkInbox events={sink} />
               </section>
@@ -286,7 +286,7 @@ export function ObserveStudio({
             <section className="p-card p-4">
               <div className="text-[13px] font-medium text-slate-800 mb-1">防护</div>
               <p className="text-[12px] text-slate-400 mb-3 leading-relaxed max-w-xl">
-                开关立刻生效，不会清空产品数据。想重新测一遍：开防护，回产品点「清空对话」再打一次，不需要重置——上下文清掉才会重新调工具，通关记录也保留。
+                开关立即生效，不会清除产品数据。复测时请开启防护，返回产品清空对话后再次尝试，通关记录仍会保留。
               </p>
               <div className="max-w-xl">
                 <DefenseToggles defenses={target.defenses} selected={defenses} onToggle={toggleDefense} />

@@ -212,7 +212,7 @@ export const supportBot: Target = {
     {
       id: "tenant_acl",
       name: "租户隔离校验",
-      description: 'get_ticket 校验工单归属租户（ctx.state["tenant"]），跨租户访问被拒绝并记录 policy_blocked。',
+      description: "查询工单时校验归属租户。跨租户访问将被拒绝，并记入观测记录。",
     },
   ] satisfies Defense[],
   simState,

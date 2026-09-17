@@ -194,7 +194,7 @@ async function simState(ctx: ToolContext): Promise<Record<string, unknown>> {
     remote: {
       data_endpoint: "/mcp-remote/data",
       auth: "Bearer JWT (HS256)",
-      note: "远端资源服务不对外签发 token；接入方凭据由所用服务的签发工具提供",
+      note: "远端资源服务不对外签发 token，接入凭据由已安装服务的签发工具提供。",
     },
   };
 }
@@ -212,13 +212,13 @@ export const mcpPlayground: Target = {
   defenses: [
     {
       id: "cross_tool_gate",
-      name: "跨工具数据流策略门",
-      description: "桥接层记录 read_secret 返回过的秘密值；harmless_sink 的 note 若包含任一已泄露秘密，拒绝执行。",
+      name: "跨工具数据拦截",
+      description: "read_secret 读取过的秘密不得再写入 harmless_sink，命中则拒绝执行。",
     },
     {
       id: "token_audience_check",
       name: "Token Audience 校验",
-      description: "/mcp-remote/data 在请求头 X-ASL-Defenses 含本项时强制校验 JWT aud == mock-remote。",
+      description: "远端数据接口将校验 JWT 的 aud 是否为 mock-remote，签发给其他受众的票据一律拒绝。",
     },
   ],
   simState,

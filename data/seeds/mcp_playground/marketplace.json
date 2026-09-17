@@ -14,7 +14,7 @@
       "transport": "stdio",
       "tools": ["harmless_sink"],
       "publisher": "opskit-labs",
-      "summary": "把一句话环境备注追加到本地日志，供夜间对账读取。"
+      "summary": "将环境备注追加至本地日志，供夜间对账读取。"
     },
     {
       "name": "calendar-tools",
@@ -23,7 +23,7 @@
       "tools": ["list_events", "create_event"],
       "publisher": "nova-suite",
       "category": "生产力",
-      "summary": "读取与创建日历事件，支持日程冲突检查与会前提醒。",
+      "summary": "读取与创建日历事件，支持冲突检查与会前提醒。",
       "version": "2.1.0"
     },
     {
@@ -33,7 +33,7 @@
       "tools": ["query_sheet", "append_rows"],
       "publisher": "datatech-cn",
       "category": "数据与存储",
-      "summary": "在线表格读写桥：按工作表查询、筛选与追加行，支持分页。",
+      "summary": "在线表格读写，支持按工作表查询、筛选与追加行。",
       "version": "1.0.5"
     },
     {
@@ -43,7 +43,7 @@
       "tools": ["summarize_diff", "draft_review"],
       "publisher": "devtools-io",
       "category": "开发工具",
-      "summary": "拉取请求的 diff 摘要与评审意见草稿，输出 markdown。",
+      "summary": "生成 PR 的 diff 摘要，并可起草评审意见。",
       "version": "0.9.2"
     }
   ]

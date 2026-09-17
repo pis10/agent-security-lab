@@ -12,28 +12,28 @@ export const PRODUCTS: Record<string, ProductMeta> = {
     tagline: "企业邮箱",
     icon: "mail",
     mark: "from-blue-500 to-indigo-600",
-    blurb: "企业邮箱客户端，内置效率助手，可代为处理收件箱、起草与发送。",
+    blurb: "企业邮箱，内置助手，支持阅读、起草与发送。",
   },
   support_bot: {
     brand: "橙犀",
     tagline: "商家客服工作台",
     icon: "store",
     mark: "from-orange-500 to-amber-500",
-    blurb: "商家客服后台：工单、知识库与坐席助手，按店铺接待顾客。",
+    blurb: "商家客服后台，提供工单、知识库与坐席助手。",
   },
   devops_assistant: {
     brand: "CloudOps",
     tagline: "云运维控制台",
     icon: "terminal",
     mark: "from-sky-500 to-cyan-600",
-    blurb: "云主机、工作目录与作业记录，内置运维助手。",
+    blurb: "云运维控制台，含云主机、工作目录与运维助手。",
   },
   mcp_playground: {
     brand: "MCP Hub",
     tagline: "工具市场",
     icon: "package",
     mark: "from-indigo-500 to-violet-600",
-    blurb: "给助手安装第三方工具，按各工具自己的说明完成请求。",
+    blurb: "为助手安装第三方工具，安装后可直接调用。",
   },
 };
 

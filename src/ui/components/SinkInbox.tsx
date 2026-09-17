@@ -34,7 +34,7 @@ export function SinkInbox({ events }: { events: SinkEvent[] }) {
         {shown.length === 0 && (
           <div className="h-full min-h-[12rem] flex flex-col items-center justify-center text-center text-slate-400 font-sans">
             <Icon name="inbox" size={20} className="mb-2 text-slate-300" />
-            <div className="text-[13px]">助手发到站外的邮件和请求会显示在这里</div>
+            <div className="text-[13px]">助手发往站外的邮件与请求将显示于此</div>
           </div>
         )}
         {shown.map((ev, i) => (

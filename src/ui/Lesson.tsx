@@ -81,7 +81,7 @@ export function Lesson({
   const done = !!progress[scenario.id];
   const obsMine = obs.find((o) => o.scenario_id === scenario.id);
   const checks = scenario.assertions.map((a, i) => ({
-    label: assertionLabel(a) || obsMine?.checks?.[i]?.label || `判据 ${i + 1}`,
+    label: assertionLabel(a) || obsMine?.checks?.[i]?.label || `条件 ${i + 1}`,
     passed: obsMine?.checks?.[i]?.passed ?? false,
   }));
   const rangeFree = `/range/${scenario.target}`;
@@ -115,7 +115,7 @@ export function Lesson({
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{scenario.title}</h1>
               <p className="text-[13px] text-slate-400 mt-2">
-                产品 {product.brand} · {target.tier_focus}
+                {product.brand} · {target.tier_focus}
               </p>
             </header>
 
@@ -140,7 +140,7 @@ export function Lesson({
             <section>
               <h2 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 mb-2">
                 <Icon name="flag" size={12} />
-                通关判定
+                通关条件
               </h2>
               {checks.length > 0 ? (
                 <ul className="space-y-1.5">
@@ -157,12 +157,10 @@ export function Lesson({
                 </ul>
               ) : (
                 <p className="text-[15px] leading-relaxed text-slate-700">
-                  观测页里能看到真实危害：数据出了产品、越权读到了、不该跑的命令跑了。
+                  通关以工具实际执行与数据外发为准，不以助手的口头回复为准。
                 </p>
               )}
-              <p className="text-[12px] text-slate-400 mt-2">
-                判定看副作用，不看模型嘴上说；证据在观测页的轨迹与外发箱里。
-              </p>
+              <p className="text-[12px] text-slate-400 mt-2">相关记录见观测页的时间线与外发箱。</p>
             </section>
 
             <Drawer icon="lightbulb" label="答案">
@@ -170,13 +168,13 @@ export function Lesson({
             </Drawer>
 
             {scenario.defenses.length > 0 && (
-              <Drawer icon="shield" label="本关防护" tone={done ? "emerald" : "slate"}>
+              <Drawer icon="shield" label="防护" tone={done ? "emerald" : "slate"}>
                 <p className="text-slate-500 mb-2">
-                  打成后到
+                  通关后请前往
                   <Link href={`/observe/${scenario.target}`} className="text-slate-700 hover:underline">
-                    观测页打开这些防护
+                    观测页
                   </Link>
-                  ，重置再打一次，应被拦截。
+                  开启防护，返回产品清空对话后再次尝试，此次应被拦截。
                 </p>
                 <ul className="space-y-2">
                   {scenario.defenses.map((d) => (
@@ -208,22 +206,24 @@ export function Lesson({
                 className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-medium py-2 transition-colors"
               >
                 <Icon name="zap" size={14} />
-                开始这节课
+                开始本关
               </Link>
               <Link
                 href={rangeFree}
                 className="w-full inline-flex items-center justify-center rounded-md border border-slate-200 bg-white text-[13px] text-slate-700 py-2 hover:border-slate-300 transition-colors"
               >
-                直接打开 {product.brand}
+                打开 {product.brand}
               </Link>
               <Link
                 href={`/observe/${scenario.target}`}
                 className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-[13px] text-slate-700 py-2 hover:border-slate-300 transition-colors"
               >
                 <Icon name="activity" size={14} />
-                查看操作记录
+                查看观测记录
               </Link>
-              <p className="text-[11px] text-slate-400 leading-relaxed">先看原理和目标，再进产品打。卡住再展开答案。</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                请先阅读目标与原理，再进入产品。答案可按需展开。
+              </p>
             </div>
             <div className="flex flex-wrap gap-1">
               {target.tier_focus.split("/").map((f) => (
