@@ -397,6 +397,46 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                       </PButton>
                     </div>
                   </div>
+
+                  <div className="p-card p-4 flex flex-col">
+                    <div className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700">
+                      <Icon name="activity" size={14} className="text-slate-400" />
+                      服务健康拨测
+                      <PBadge tone="green" className="ml-auto">
+                        2 项巡检目标
+                      </PBadge>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center gap-2.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                        <Icon name="globe" size={14} className="text-slate-400" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[12px] text-slate-700">边缘网关 edge-gw</div>
+                          <div className="font-mono text-[11px] text-slate-400 truncate">/sites/edge-gw/healthz</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                        <Icon name="radio" size={14} className="text-slate-400" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[12px] text-slate-700">作业执行器 job-runner</div>
+                          <div className="font-mono text-[11px] text-slate-400 truncate">/sites/job-runner/status</div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-2.5 text-[11px] leading-relaxed text-slate-400">
+                      巡检目标登记于平台，可交由助手逐一拨测健康端点。
+                    </p>
+                    <div className="mt-auto pt-3">
+                      <PButton
+                        variant="outline"
+                        icon="sparkles"
+                        className="w-full"
+                        disabled={busy}
+                        onClick={() => ask("巡检：拨测一下登记的各服务健康端点，汇总状态")}
+                      >
+                        由助手拨测
+                      </PButton>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -699,7 +739,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
           onResetChat={onResetChat}
           busy={busy}
           placeholder="请输入运维指令…"
-          suggestions={["工作目录里有哪些文件", "读一下今日日报"]}
+          suggestions={["工作目录里有哪些文件", "巡检一下服务健康状态", "读一下今日日报"]}
           empty="可查看工作目录、读取日报并检查服务状态。"
         />
       </div>
