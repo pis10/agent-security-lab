@@ -1,94 +1,158 @@
-/**靶标共用的 tool-calling 循环。脆弱点在产品和工具配置。 */
-import type { LLMClient, LLMResponse } from "./llm.ts";
-import type { ToolContext, ToolRegistry } from "./tools.ts";
+/**靶场 Agent：Pi Agent 循环 + 轨迹映射。 */
+import { Agent, type AgentMessage, type AgentTool, type AgentToolResult } from "@earendil-works/pi-agent-core";
+import { contentText, type Model, type ModelThinkingLevel } from "@earendil-works/pi-ai";
+import type { ChatMessage } from "../lib/contracts.ts";
+import { getPiModels, requireLlm } from "./pi-runtime.ts";
 import type { Tracer } from "./trace.ts";
 
-export interface ReplayMessage {
-  role: string;
-  content?: unknown;
-  tool_calls?: unknown;
-  tool_call_id?: string;
-  name?: string;
+export const MAX_AGENT_TURNS = 10;
+export const BUDGET_NOTE = "[budget] max agent turns reached; stopping the loop";
+
+const EMPTY_USAGE = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+
+function userText(message: AgentMessage): string {
+  if (message.role !== "user") return "";
+  return typeof message.content === "string" ? message.content : contentText(message.content);
 }
 
-function assistantToolMsg(resp: LLMResponse): ReplayMessage {
-  return {
-    role: "assistant",
-    content: resp.content ?? "",
-    tool_calls: resp.toolCalls.map((tc) => ({
-      id: tc.id,
-      type: "function",
-      function: { name: tc.name, arguments: tc.argumentsJson },
-    })),
-  };
+function assistantText(message: AgentMessage): string | null {
+  if (message.role !== "assistant") return null;
+  const parts = message.content.filter((c) => c.type === "text").map((c) => c.text);
+  const text = parts.join("");
+  return text === "" ? null : text;
 }
 
-export class Agent {
-  llm: LLMClient;
-  tools: ToolRegistry;
-  tracer: Tracer;
-  maxTurns: number;
-  private _messages: ReplayMessage[];
+function assistantThinking(message: AgentMessage): string | null {
+  if (message.role !== "assistant") return null;
+  const parts = message.content.filter((c) => c.type === "thinking").map((c) => c.thinking);
+  const text = parts.join("");
+  return text === "" ? null : text;
+}
 
-  constructor(llm: LLMClient, tools: ToolRegistry, systemPrompt: string, tracer: Tracer, maxTurns = 10) {
-    this.llm = llm;
-    this.tools = tools;
-    this.tracer = tracer;
-    this.maxTurns = maxTurns;
-    this._messages = [{ role: "system", content: systemPrompt }];
+function assistantToolCalls(message: AgentMessage): Array<{ name: string; arguments: Record<string, unknown> }> {
+  if (message.role !== "assistant") return [];
+  return message.content
+    .filter((c) => c.type === "toolCall")
+    .map((c) => ({ name: c.name, arguments: c.arguments as Record<string, unknown> }));
+}
+
+function toolResultText(result: AgentToolResult<unknown>): string {
+  return contentText(result.content);
+}
+
+export function lastAssistantText(messages: readonly AgentMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = assistantText(messages[i]);
+    if (text !== null) return text;
   }
+  return "";
+}
 
-  get messages(): ReplayMessage[] {
-    return [...this._messages];
+export function endedOnToolResults(messages: readonly AgentMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === "toolResult") continue;
+    if (m.role === "assistant") return assistantToolCalls(m).length > 0;
+    return false;
   }
+  return false;
+}
 
-  /**用持久化的完整回放消息替换内部历史（含 system 位；恢复世界时使用）。 */
-  restore(messages: ReplayMessage[]): void {
-    this._messages = [...messages];
+export function isPiTranscript(raw: unknown): raw is AgentMessage[] {
+  if (!Array.isArray(raw) || raw.length === 0) return false;
+  const first = raw[0];
+  return (
+    typeof first === "object" &&
+    first !== null &&
+    "role" in first &&
+    typeof (first as { timestamp?: unknown }).timestamp === "number"
+  );
+}
+
+/**有正文的 user/assistant 消息进聊天框。 */
+export function projectChat(messages: readonly AgentMessage[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "user") {
+      const content = userText(m);
+      if (content !== "") out.push({ role: "user", content });
+    } else if (m.role === "assistant") {
+      const content = assistantText(m);
+      if (content) out.push({ role: "assistant", content });
+    }
   }
+  return out;
+}
 
-  /**向回放历史追加一条助手消息。 */
-  noteAssistant(content: string): void {
-    this._messages.push({ role: "assistant", content });
-  }
+export function appendAssistantNote(agent: Agent, text: string): void {
+  const model: Model<string> = agent.state.model;
+  agent.state.messages = [
+    ...agent.state.messages,
+    {
+      role: "assistant",
+      content: [{ type: "text", text }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: EMPTY_USAGE,
+      stopReason: "stop",
+      timestamp: Date.now(),
+    },
+  ];
+}
 
-  async run(userMessage: string, ctx: ToolContext): Promise<string> {
-    this.tracer.record("user_msg", { content: userMessage });
-    this._messages.push({ role: "user", content: userMessage });
-
-    for (let turn = 0; turn < this.maxTurns; turn++) {
-      const resp = await this.llm.chat(
-        this._messages,
-        this.tools.schemas().length > 0 ? this.tools.schemas() : undefined,
-      );
-      this.tracer.record("model_msg", {
-        content: resp.content,
-        reasoning: resp.reasoning,
-        tool_calls: resp.toolCalls.map((tc) => ({ name: tc.name, arguments: tc.arguments })),
-      });
-      if (resp.toolCalls.length === 0) {
-        const final = resp.content ?? "";
-        this._messages.push({ role: "assistant", content: final });
-        return final;
-      }
-
-      this._messages.push(assistantToolMsg(resp));
-      for (const tc of resp.toolCalls) {
-        this.tracer.record("tool_call", { id: tc.id, name: tc.name, arguments: tc.arguments });
-        const result = await this.tools.call(tc.name, tc.arguments, ctx);
-        this.tracer.record("tool_result", { id: tc.id, name: tc.name, result: result.slice(0, 4000) });
-        this._messages.push({
-          role: "tool",
-          tool_call_id: tc.id,
-          name: tc.name,
-          content: result,
+export function attachTracer(agent: Agent, tracer: Tracer): () => void {
+  return agent.subscribe((event) => {
+    if (event.type === "message_end") {
+      const m = event.message;
+      if (m.role === "user") {
+        tracer.record("user_msg", { content: userText(m) });
+      } else if (m.role === "assistant") {
+        tracer.record("model_msg", {
+          content: assistantText(m),
+          reasoning: assistantThinking(m),
+          tool_calls: assistantToolCalls(m),
         });
       }
+    } else if (event.type === "tool_execution_start") {
+      tracer.record("tool_call", { id: event.toolCallId, name: event.toolName, arguments: event.args });
+    } else if (event.type === "tool_execution_end") {
+      tracer.record("tool_result", {
+        id: event.toolCallId,
+        name: event.toolName,
+        result: toolResultText(event.result).slice(0, 4000),
+      });
     }
+  });
+}
 
-    const note = "[budget] max tool turns reached; stopping the loop";
-    this.tracer.record("note", { text: note });
-    this._messages.push({ role: "assistant", content: note });
-    return note;
-  }
+export async function createLabAgent(opts: {
+  systemPrompt: string;
+  tools: AgentTool[];
+  thinkingLevel: ModelThinkingLevel;
+  temperature: number;
+  messages?: AgentMessage[];
+}): Promise<Agent> {
+  const model = await requireLlm();
+  const models = getPiModels();
+  let turns = 0;
+  return new Agent({
+    initialState: {
+      systemPrompt: opts.systemPrompt,
+      model,
+      thinkingLevel: opts.thinkingLevel,
+      tools: opts.tools,
+      messages: opts.messages,
+    },
+    streamFn: (m, context, options) => models.streamSimple(m, context, { ...options, temperature: opts.temperature }),
+    toolExecution: "sequential",
+    shouldStopAfterTurn: () => ++turns >= MAX_AGENT_TURNS,
+  });
 }

@@ -8,15 +8,57 @@
 
 唯一部署方式是 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。容器里才有 `cat` / `id` 这条命令注入面。
 
+模型走 [Pi](https://github.com/earendil-works/pi) 的 `pi-ai` / `pi-agent-core`：协议由 SDK 处理，进程直连厂商 API。进程启动时向 `pi.dev` 拉取 **当前** `ASL_LLM_PROVIDER` 的模型覆盖层（超时 4 秒）；失败则继续用包内目录。不会轮询，也不会拉全部厂商。`models.json` 里自建的 provider 不走这次拉取。
+
 ```bash
-cp .env.example .env   # 填 GLM Coding Plan 的 API Key
+cp .env.example .env
+# 默认：ASL_LLM_PROVIDER=zai-coding-cn，填 ZAI_CODING_CN_API_KEY
 docker compose up -d --build
 # http://127.0.0.1:8600
 ```
 
-`.env` 只放本机，compose 注入容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。
+`.env` 只放本机，compose 注入容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。升级后若对话无法恢复，对该产品重置即可（旧 transcript 格式不转换）。
 
-改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm build`），跑靶场仍走上面的 compose。
+换厂商只改 `ASL_LLM_PROVIDER`、`ASL_LLM_MODEL` 和该厂商的原生 Key，例如：
+
+```bash
+ASL_LLM_PROVIDER=openai
+ASL_LLM_MODEL=gpt-4.1-mini
+OPENAI_API_KEY=sk-...
+```
+
+```bash
+ASL_LLM_PROVIDER=anthropic
+ASL_LLM_MODEL=claude-sonnet-4-6
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+```bash
+ASL_LLM_PROVIDER=openrouter
+ASL_LLM_MODEL=anthropic/claude-sonnet-4
+OPENROUTER_API_KEY=...
+```
+
+目录里没有的网关或本地模型，用本项目的 `models.json` **子集**（不是 Pi coding-agent 的全量字段）：
+
+```json
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://host.docker.internal:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [{ "id": "qwen2.5-coder:7b" }]
+    }
+  }
+}
+```
+
+`ASL_MODELS_JSON` 指向该文件，`ASL_LLM_PROVIDER=ollama`，`ASL_LLM_MODEL=qwen2.5-coder:7b`。`api` 仅支持 `openai-completions` 与 `anthropic-messages`；`apiKey` 可以是字面量或 `$ENV_VAR`。
+
+不要把 coding-agent 的 `read` / `write` / `edit` / `bash` 装进靶场。模型只能看到各产品自己的工具。
+
+改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm test` / `corepack pnpm build`），跑靶场仍走上面的 compose。
 
 ## 怎么玩
 
@@ -42,7 +84,7 @@ docker compose up -d --build
 
 ```
 src/app/         页面与 HTTP 入口（产品 UI、/api、/sink、/internal、/mcp-remote）
-src/core/        agent、LLM、工具、轨迹、断言、外发箱、进度库
+src/core/        agent（Pi 循环）、工具上下文、轨迹、断言、外发箱、进度库
 src/targets/     四个产品
 src/scenarios/   五关课
 src/world/       产品世界
@@ -55,7 +97,7 @@ data/runtime/    运行时世界（gitignore，容器内挂卷）
 
 ## 安全
 
-- API Key 只在 `.env`。
+- API Key 只在 `.env`（使用各厂商原生变量名，如 `ZAI_CODING_CN_API_KEY`）。
 - 端口只发布到回环地址。
 - 容器非 root、根文件系统只读、丢弃全部 capabilities；可写路径是 `data/runtime`。
 - 外发箱和假内网是同一进程里的路由。

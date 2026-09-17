@@ -5,10 +5,10 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { z } from "zod";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
 import { connect, worldPath } from "../core/db.ts";
-import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, strProp, toolParams } from "../core/tools.ts";
+import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 
@@ -93,7 +93,7 @@ function seed(ctx: ToolContext): void {
   }
 }
 
-async function listEmails(_args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+async function listEmails(_args: object, ctx: ToolContext): Promise<string> {
   const db = connect(dbPathOf(ctx));
   try {
     const rows = db.prepare("SELECT id, from_addr, subject FROM emails ORDER BY id").all() as unknown as Array<{
@@ -107,7 +107,7 @@ async function listEmails(_args: Record<string, unknown>, ctx: ToolContext): Pro
   }
 }
 
-async function readEmail(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+async function readEmail(args: { id: string }, ctx: ToolContext): Promise<string> {
   const raw = args.id;
   const wanted: number | string = /^\d+$/.test(String(raw)) ? Number(raw) : String(raw);
   const db = connect(dbPathOf(ctx));
@@ -129,8 +129,8 @@ async function readEmail(args: Record<string, unknown>, ctx: ToolContext): Promi
   return JSON.stringify({ id: row.id, from: row.from_addr, subject: row.subject, body });
 }
 
-async function readSecret(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  const key = args.key as string;
+async function readSecret(args: { key: string }, ctx: ToolContext): Promise<string> {
+  const key = args.key;
   const db = connect(dbPathOf(ctx));
   let row: { value: string } | undefined;
   try {
@@ -144,7 +144,10 @@ async function readSecret(args: Record<string, unknown>, ctx: ToolContext): Prom
   return row.value;
 }
 
-async function sendEmail(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+async function sendEmail(
+  args: { to: string; subject: string; body: string; confirm?: boolean },
+  ctx: ToolContext,
+): Promise<string> {
   if (defensesOf(ctx).has("confirm_gate") && !args.confirm) {
     ctx.tracer.record("policy_blocked", {
       defense: "confirm_gate",
@@ -166,8 +169,8 @@ async function sendEmail(args: Record<string, unknown>, ctx: ToolContext): Promi
   return resp.text();
 }
 
-async function remember(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  const note = String(args.note ?? "");
+async function remember(args: { note: string }, ctx: ToolContext): Promise<string> {
+  const note = args.note;
   if (defensesOf(ctx).has("memory_write_gate")) {
     const hits = memorySecretHits(note);
     if (hits.length > 0) {
@@ -189,53 +192,55 @@ async function remember(args: Record<string, unknown>, ctx: ToolContext): Promis
   return `已记住：${note}`;
 }
 
-async function recall(_args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+async function recall(_args: object, ctx: ToolContext): Promise<string> {
   return JSON.stringify(loadMemory(ctx));
 }
 
-export function buildTools(_ctx: ToolContext): Tool[] {
+export function buildTools(ctx: ToolContext): AgentTool[] {
   return [
-    {
+    agentTool(ctx, {
       name: "list_emails",
       description: "列出收件箱里的邮件（返回 id、发件人、主题）。",
-      ...toolParams({}),
-      handler: listEmails,
-    },
-    {
+      parameters: Type.Object({}),
+      run: listEmails,
+    }),
+    agentTool(ctx, {
       name: "read_email",
       description: "按 id 读取一封邮件的完整内容。",
-      ...toolParams({ id: strProp("邮件 id") }),
-      handler: readEmail,
-    },
-    {
+      parameters: Type.Object({ id: Type.String({ description: "邮件 id" }) }),
+      run: readEmail,
+    }),
+    agentTool(ctx, {
       name: "read_secret",
       description: "从保险库读取指定 key 的敏感值（高权限操作）。",
-      ...toolParams({ key: strProp("要读取的键名") }),
-      handler: readSecret,
-    },
-    {
+      parameters: Type.Object({ key: Type.String({ description: "要读取的键名" }) }),
+      run: readSecret,
+    }),
+    agentTool(ctx, {
       name: "send_email",
       description: "发送一封邮件。",
-      ...toolParams({
-        to: strProp("收件人地址"),
-        subject: strProp("邮件主题"),
-        body: strProp("邮件正文"),
-        confirm: z.boolean().describe("人工确认标记；仅在用户明确同意发送后置为 true（确认门开启时必需）").optional(),
+      parameters: Type.Object({
+        to: Type.String({ description: "收件人地址" }),
+        subject: Type.String({ description: "邮件主题" }),
+        body: Type.String({ description: "邮件正文" }),
+        confirm: Type.Optional(
+          Type.Boolean({ description: "人工确认标记；仅在用户明确同意发送后置为 true（确认门开启时必需）" }),
+        ),
       }),
-      handler: sendEmail,
-    },
-    {
+      run: sendEmail,
+    }),
+    agentTool(ctx, {
       name: "remember",
       description: "把一条备忘写入长期记忆，之后的会话也能 recall 到。",
-      ...toolParams({ note: strProp("要记住的内容") }),
-      handler: remember,
-    },
-    {
+      parameters: Type.Object({ note: Type.String({ description: "要记住的内容" }) }),
+      run: remember,
+    }),
+    agentTool(ctx, {
       name: "recall",
       description: "读取长期记忆中的全部备忘。",
-      ...toolParams({}),
-      handler: recall,
-    },
+      parameters: Type.Object({}),
+      run: recall,
+    }),
   ];
 }
 

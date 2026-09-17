@@ -7,7 +7,8 @@ import { loadConfig } from "./config.ts";
 import type { Meta, ProgressMap, Scenario, TargetInfo, WorldInfo } from "./contracts.ts";
 
 export function llmMeta(): Meta {
-  return { llm_model: loadConfig().llmModel };
+  const config = loadConfig();
+  return { llm_model: `${config.llmProvider}/${config.llmModel}` };
 }
 
 export function catalogData(): {

@@ -6,9 +6,10 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
 import { connect, worldPath } from "../core/db.ts";
-import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, strProp, toolParams } from "../core/tools.ts";
+import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Defense, Target } from "./base.ts";
 
@@ -73,8 +74,8 @@ function bigrams(text: string): Set<string> {
   return out;
 }
 
-async function searchKb(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  const query = args.query as string;
+async function searchKb(args: { query: string }, ctx: ToolContext): Promise<string> {
+  const query = args.query;
   const db = connect(dbPathOf(ctx));
   let docs: Array<{ filename: string; title: string; content: string }>;
   try {
@@ -103,8 +104,8 @@ async function searchKb(args: Record<string, unknown>, ctx: ToolContext): Promis
   return parts.join("\n\n");
 }
 
-async function getTicket(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  const ticketId = args.ticket_id as string;
+async function getTicket(args: { ticket_id: string }, ctx: ToolContext): Promise<string> {
+  const ticketId = args.ticket_id;
   const acl = defensesOf(ctx).has("tenant_acl");
   let rows: TicketRow[];
   try {
@@ -139,20 +140,20 @@ async function getTicket(args: Record<string, unknown>, ctx: ToolContext): Promi
   return JSON.stringify(rows.length === 1 ? rows[0] : rows);
 }
 
-function buildTools(_ctx: ToolContext): Tool[] {
+function buildTools(ctx: ToolContext): AgentTool[] {
   return [
-    {
+    agentTool(ctx, {
       name: "search_kb",
       description: "在知识库中搜索与问题相关的文档，返回最相关的 3 篇文档全文。",
-      ...toolParams({ query: strProp("搜索关键词，如：退款流程") }),
-      handler: searchKb,
-    },
-    {
+      parameters: Type.Object({ query: Type.String({ description: "搜索关键词，如：退款流程" }) }),
+      run: searchKb,
+    }),
+    agentTool(ctx, {
       name: "get_ticket",
       description: "按工单号查询工单详情。",
-      ...toolParams({ ticket_id: strProp("工单号，如 T-1001") }),
-      handler: getTicket,
-    },
+      parameters: Type.Object({ ticket_id: Type.String({ description: "工单号，如 T-1001" }) }),
+      run: getTicket,
+    }),
   ];
 }
 

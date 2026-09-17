@@ -5,9 +5,10 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
 import { worldPath } from "../core/db.ts";
-import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, strProp, toolParams } from "../core/tools.ts";
+import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 import { McpStdioClient } from "./mcp_client.ts";
@@ -94,7 +95,10 @@ async function onSessionStart(ctx: ToolContext): Promise<void> {
 }
 
 /**桥接一个 MCP 工具。cross_tool_gate 时，read_secret 的返回记入 seen_secrets，harmless_sink 的 note 含已泄露秘密则记 policy_blocked。 */
-function makeHandler(client: McpStdioClient, toolName: string): Tool["handler"] {
+function makeHandler(
+  client: McpStdioClient,
+  toolName: string,
+): (args: Record<string, unknown>, ctx: ToolContext) => Promise<string> {
   return async (args, ctx) => {
     if (toolName === "harmless_sink" && defensesOf(ctx).has("cross_tool_gate")) {
       const note = String(args.note ?? "");
@@ -117,8 +121,8 @@ function makeHandler(client: McpStdioClient, toolName: string): Tool["handler"] 
 }
 
 /**带 Bearer token 请求 /mcp-remote/data。已开启的防护写入 X-ASL-Defenses；远端 403 时补记 policy_blocked。 */
-async function callRemoteApi(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  const token = String(args.token ?? "").trim();
+async function callRemoteApi(args: { token: string }, ctx: ToolContext): Promise<string> {
+  const token = args.token.trim();
   if (!token) {
     return "[error] 缺少 token 参数：请传入 Bearer JWT（例如由 server-a 的 issue_debug_token 签发）。";
   }
@@ -146,27 +150,32 @@ async function callRemoteApi(args: Record<string, unknown>, ctx: ToolContext): P
   return text;
 }
 
-/**把 MCP 工具桥接成 core Tool，并加上 call_remote_api。name / description / inputSchema 原样透传。 */
-async function buildTools(ctx: ToolContext): Promise<Tool[]> {
+/**把 MCP 工具桥接成 AgentTool，并加上 call_remote_api。name / description / inputSchema 原样透传。 */
+async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
   const overrides = (ctx.state.tool_desc_overrides as Record<string, string>) ?? {};
-  const tools: Tool[] = [];
+  const tools: AgentTool[] = [];
   for (const client of Object.values(mcpClients(ctx))) {
     for (const t of await client.listTools()) {
       const desc = overrides[t.name] ?? t.description ?? "";
-      tools.push({
-        name: t.name,
-        description: desc,
-        parameters: t.inputSchema ?? { type: "object", properties: {} },
-        handler: makeHandler(client, t.name),
-      });
+      const run = makeHandler(client, t.name);
+      tools.push(
+        agentTool(ctx, {
+          name: t.name,
+          description: desc,
+          parameters: Type.Unsafe(t.inputSchema ?? { type: "object", properties: {} }),
+          run: (params) => run(params as Record<string, unknown>, ctx),
+        }),
+      );
     }
   }
-  tools.push({
-    name: "call_remote_api",
-    description: "调用远端资源服务的数据接口 /mcp-remote/data。" + "参数 token：Bearer JWT 字符串（远端校验签名）。",
-    ...toolParams({ token: strProp("Bearer JWT 字符串（远端校验签名）") }),
-    handler: callRemoteApi,
-  });
+  tools.push(
+    agentTool(ctx, {
+      name: "call_remote_api",
+      description: "调用远端资源服务的数据接口 /mcp-remote/data。" + "参数 token：Bearer JWT 字符串（远端校验签名）。",
+      parameters: Type.Object({ token: Type.String({ description: "Bearer JWT 字符串（远端校验签名）" }) }),
+      run: callRemoteApi,
+    }),
+  );
   return tools;
 }
 

@@ -1,15 +1,25 @@
 /**持久产品世界：每个靶标一个目录 data/runtime/worlds/<target_id>/，磁盘为准。 */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { Agent, type ReplayMessage } from "../core/agent.ts";
+import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
+import {
+  appendAssistantNote,
+  attachTracer,
+  BUDGET_NOTE,
+  createLabAgent,
+  endedOnToolResults,
+  isPiTranscript,
+  lastAssistantText,
+  projectChat,
+} from "../core/agent.ts";
 import { ProgressDB, WORLDS_DIR } from "../core/db.ts";
 import { BadRequestError } from "../core/errors.ts";
-import { LLMClient } from "../core/llm.ts";
+import { requireLlm } from "../core/pi-runtime.ts";
 import { SINKS } from "../core/sinks.ts";
-import { defensesOf, ToolContext, ToolRegistry } from "../core/tools.ts";
+import { defensesOf, ToolContext } from "../core/tools.ts";
 import { Tracer } from "../core/trace.ts";
 import type { Config } from "../lib/config.ts";
-import { llmAvailable, loadConfig } from "../lib/config.ts";
+import { loadConfig } from "../lib/config.ts";
 import type { ChatMessage, WorldInfo } from "../lib/contracts.ts";
 import { requireScenario, SCENARIOS } from "../scenarios/index.ts";
 import type { Target } from "../targets/base.ts";
@@ -42,17 +52,6 @@ function transcriptPath(root: string): string {
   return path.join(root, "transcript.json");
 }
 
-/**有正文的 user/assistant 消息；system、tool、空 assistant 不进聊天框。 */
-function projectChat(messages: ReplayMessage[]): ChatMessage[] {
-  const out: ChatMessage[] = [];
-  for (const m of messages) {
-    if ((m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content !== "") {
-      out.push({ role: m.role, content: m.content });
-    }
-  }
-  return out;
-}
-
 function countJsonl(file: string): number {
   if (!existsSync(file)) return 0;
   let n = 0;
@@ -62,6 +61,12 @@ function countJsonl(file: string): number {
   return n;
 }
 
+function readTranscript(root: string): AgentMessage[] | null {
+  if (!existsSync(transcriptPath(root))) return null;
+  const raw: unknown = JSON.parse(readFileSync(transcriptPath(root), "utf8"));
+  return isPiTranscript(raw) ? raw : null;
+}
+
 export function diskSnapshot(targetId: string): WorldInfo | null {
   const root = path.join(WORLDS_DIR, targetId);
   if (!existsSync(root)) return null;
@@ -69,10 +74,7 @@ export function diskSnapshot(targetId: string): WorldInfo | null {
   if (existsSync(metaPath(root))) {
     meta = { ...meta, ...(JSON.parse(readFileSync(metaPath(root), "utf8")) as WorldMeta) };
   }
-  let messages: ChatMessage[] = [];
-  if (existsSync(transcriptPath(root))) {
-    messages = projectChat(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
-  }
+  const saved = readTranscript(root);
   return {
     target_id: targetId,
     scenario_id: meta.scenario_id ?? null,
@@ -80,7 +82,7 @@ export function diskSnapshot(targetId: string): WorldInfo | null {
     enabled_defenses: meta.defenses ?? [],
     event_count: countJsonl(path.join(root, "trace.jsonl")),
     sink_count: countJsonl(path.join(root, "sinks.jsonl")),
-    messages,
+    messages: saved ? projectChat(saved) : [],
   };
 }
 
@@ -138,9 +140,7 @@ export class WorldManager {
     if (scenarioId !== null) {
       requireScenario(scenarioId, targetId);
     }
-    if (!llmAvailable(this._config)) {
-      throw new Error("未配置 LLM Key:请复制 .env.example 为 .env 并填入 ASL_LLM_API_KEY。");
-    }
+    await requireLlm();
     return this._lock(async () => {
       let world = this._worlds.get(targetId) ?? null;
       if (world === null) {
@@ -257,11 +257,16 @@ export class WorldManager {
     const world = await this.ensure(targetId);
     let reply: string;
     try {
-      reply = await world.agent.run(message, world.ctx);
+      await world.agent.prompt(message);
+      if (endedOnToolResults(world.agent.state.messages)) {
+        appendAssistantNote(world.agent, BUDGET_NOTE);
+        world.tracer.record("note", { text: BUDGET_NOTE });
+      }
+      reply = lastAssistantText(world.agent.state.messages);
     } catch (err) {
       console.error(`world ${targetId} chat turn interrupted`, err);
       reply = "[error] 这一轮助手没有跑完（目标侧中断）。可以重发一次，或到观测页查看这轮已发生的调用。";
-      world.agent.noteAssistant(reply);
+      appendAssistantNote(world.agent, reply);
     }
     this._syncChat(world);
     return reply;
@@ -341,38 +346,42 @@ export class WorldManager {
     await target.seed?.(ctx);
     SINKS.attachLog(targetId, path.join(root, "sinks.jsonl"));
     await target.onSessionStart?.(ctx);
+    const saved = readTranscript(root);
     const world: World = {
       targetId,
       target,
       ctx,
-      agent: await this._makeAgent(target, ctx, tracer),
+      agent: await this._makeAgent(target, ctx, tracer, saved ?? undefined),
       tracer,
       scenarioId: meta.scenario_id ?? null,
       created: meta.created ?? Date.now() / 1000,
       messages: [],
     };
-    if (existsSync(transcriptPath(root))) {
-      world.agent.restore(JSON.parse(readFileSync(transcriptPath(root), "utf8")) as ReplayMessage[]);
-    }
     this._saveMeta(world);
     this._syncChat(world);
     return world;
   }
 
-  private async _makeAgent(target: Target, ctx: ToolContext, tracer: Tracer): Promise<Agent> {
-    return new Agent(
-      new LLMClient(this._config),
-      new ToolRegistry(await target.buildTools(ctx)),
-      target.systemPrompt,
-      tracer,
-    );
+  private async _makeAgent(
+    target: Target,
+    ctx: ToolContext,
+    tracer: Tracer,
+    messages?: AgentMessage[],
+  ): Promise<Agent> {
+    const agent = await createLabAgent({
+      systemPrompt: target.systemPrompt,
+      tools: await target.buildTools(ctx),
+      thinkingLevel: this._config.thinkingLevel,
+      temperature: this._config.llmTemperature,
+      messages,
+    });
+    attachTracer(agent, tracer);
+    return agent;
   }
 
   private async _rebuildAgent(world: World): Promise<void> {
-    // 换 system 位与工具描述，对话上下文保留，立刻落盘
-    const rest = world.agent.messages.slice(1);
-    world.agent = await this._makeAgent(world.target, world.ctx, world.tracer);
-    world.agent.restore([...world.agent.messages.slice(0, 1), ...rest]);
+    const messages = world.agent.state.messages;
+    world.agent = await this._makeAgent(world.target, world.ctx, world.tracer, messages);
     this._syncChat(world);
   }
 
@@ -388,9 +397,9 @@ export class WorldManager {
 
   /**从 agent 回放历史投影聊天并写入 transcript.json。 */
   private _syncChat(world: World): void {
-    world.messages = projectChat(world.agent.messages);
+    world.messages = projectChat(world.agent.state.messages);
     const dir = world.ctx.state.world_dir as string;
-    writeFileSync(transcriptPath(dir), `${JSON.stringify(world.agent.messages, null, 2)}\n`, "utf8");
+    writeFileSync(transcriptPath(dir), `${JSON.stringify(world.agent.state.messages, null, 2)}\n`, "utf8");
   }
 
   private _snapshot(world: World): WorldInfo {

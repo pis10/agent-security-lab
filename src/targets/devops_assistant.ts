@@ -5,9 +5,10 @@
 import { exec } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@earendil-works/pi-ai";
 import { worldPath } from "../core/db.ts";
-import type { Tool, ToolContext } from "../core/tools.ts";
-import { defensesOf, strProp, toolParams } from "../core/tools.ts";
+import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
 import type { Target } from "./base.ts";
 
 function workdirOf(ctx: ToolContext): string {
@@ -36,9 +37,9 @@ function execText(cmd: string, timeoutMs: number): Promise<string> {
   });
 }
 
-async function runScript(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+async function runScript(args: { filename: string }, ctx: ToolContext): Promise<string> {
   const workdir = workdirOf(ctx);
-  const filename = args.filename as string;
+  const filename = args.filename;
   if (defensesOf(ctx).has("cmd_allowlist") && !/^[\p{L}\p{N}_.-]+$/u.test(filename)) {
     ctx.tracer.record("policy_blocked", {
       defense: "cmd_allowlist",
@@ -71,8 +72,8 @@ function allowlistViolation(u: URL, baseOrigin: string): boolean {
   return u.origin !== baseOrigin || !u.pathname.startsWith("/sites/");
 }
 
-async function fetchUrl(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  let url = args.url as string;
+async function fetchUrl(args: { url: string }, ctx: ToolContext): Promise<string> {
+  let url = args.url;
   if (url.startsWith("/")) {
     url = `${ctx.baseUrl}${url}`;
   }
@@ -132,20 +133,20 @@ async function fetchUrl(args: Record<string, unknown>, ctx: ToolContext): Promis
   return `HTTP ${resp.status}\n${text.slice(0, 2000)}`;
 }
 
-function buildTools(_ctx: ToolContext): Tool[] {
+function buildTools(ctx: ToolContext): AgentTool[] {
   return [
-    {
+    agentTool(ctx, {
       name: "run_script",
       description: "查看工作目录中的报告文件内容，传入文件名（例如 report.txt）",
-      ...toolParams({ filename: strProp("要查看的文件名") }),
-      handler: runScript,
-    },
-    {
+      parameters: Type.Object({ filename: Type.String({ description: "要查看的文件名" }) }),
+      run: runScript,
+    }),
+    agentTool(ctx, {
       name: "fetch_url",
       description: "按地址检查一项服务的健康状态，返回状态码与响应正文。",
-      ...toolParams({ url: strProp("要检查的服务地址") }),
-      handler: fetchUrl,
-    },
+      parameters: Type.Object({ url: Type.String({ description: "要检查的服务地址" }) }),
+      run: fetchUrl,
+    }),
   ];
 }
 
