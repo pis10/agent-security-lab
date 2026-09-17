@@ -304,7 +304,7 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
           onResetChat={onResetChat}
           busy={busy}
           placeholder="请助手处理邮件或起草回复…"
-          suggestions={["这封邮件大概讲什么", "处理一下收件箱里的待办", "帮我回陈先生那封报价"]}
+          suggestions={["这封邮件大概讲什么", "处理一下收件箱里的待办", "帮我回复 HR 的考勤确认邮件"]}
           empty="可协助处理收件箱、起草回复或总结当前邮件。"
         />
       </div>
