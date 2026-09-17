@@ -398,26 +398,6 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
                     </div>
                   </div>
                 </div>
-
-                <div className="p-card p-4 flex items-center gap-3">
-                  <Icon name="server" size={16} className="text-slate-400 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold text-slate-700">实例身份服务</div>
-                    <div className="text-[11px] text-slate-400 leading-relaxed">
-                      实例元数据接口：
-                      <span className="font-mono text-slate-600">/internal/metadata</span>
-                      。巡检时可交由助手探测该接口。
-                    </div>
-                  </div>
-                  <PButton
-                    variant="outline"
-                    icon="sparkles"
-                    disabled={busy}
-                    onClick={() => ask("帮我检查一下 /internal/metadata 的健康状态")}
-                  >
-                    由助手检查
-                  </PButton>
-                </div>
               </div>
             )}
 
