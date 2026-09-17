@@ -224,14 +224,17 @@ export class WorldManager {
   }
 
   async reset(targetId: string, scenarioId: string | null = null): Promise<World> {
-    // 清世界与该产品通关记录；防护开关与课程绑定保留（观测页/产品页重置行为一致）
+    // 清世界与当前课程的通关记录（未绑定课程时清该产品全部）；防护开关与课程绑定保留
     const keep = await this._lock(async () => {
       const defenses = new Set(this._defensesOf(targetId));
       const boundScenario = scenarioId ?? this._scenarioOf(targetId);
       await this._teardown(targetId);
       return { defenses, boundScenario };
     });
-    getProgressDb().clearIds(SCENARIOS.filter((s) => s.target === targetId).map((s) => s.id));
+    const progressIds = keep.boundScenario
+      ? [keep.boundScenario]
+      : SCENARIOS.filter((s) => s.target === targetId).map((s) => s.id);
+    getProgressDb().clearIds(progressIds);
     const world = await this.ensure(targetId, keep.boundScenario);
     if (keep.defenses.size > 0) {
       await this._lock(async () => {

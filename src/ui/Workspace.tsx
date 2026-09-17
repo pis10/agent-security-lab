@@ -167,8 +167,7 @@ export function Workspace({
   }, [ready, busy, targetId, messages]);
 
   const resetWorld = () => {
-    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发及本产品相关课程的通关进度将被清除。`))
-      return;
+    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发将被清除，通关进度仅清除当前课程。`)) return;
     api
       .resetWorld(targetId, missionId || null)
       .then((w) => {
