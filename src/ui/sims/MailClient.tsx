@@ -27,7 +27,7 @@ function listTime(date?: string): string {
   return time || day;
 }
 
-export default function MailClient({ simState, messages, onSend, onAct, onResetChat, busy }: SimProps) {
+export default function MailClient({ simState, messages, onSend, onResetChat, busy }: SimProps) {
   const emails: Mail[] = useMemo(
     () => (Array.isArray(simState.emails) ? [...simState.emails].reverse() : []),
     [simState.emails],
@@ -40,12 +40,6 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
   const [starIds, setStarIds] = useState<ReadonlySet<number>>(new Set());
   const [folder, setFolder] = useState<"inbox" | "starred">("inbox");
   const [query, setQuery] = useState("");
-  const [compose, setCompose] = useState(false);
-  const [fromAddr, setFromAddr] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [composeBusy, setComposeBusy] = useState(false);
-  const [composeErr, setComposeErr] = useState<string | null>(null);
 
   const visible = emails.filter((e) => {
     if (folder === "starred" && !starIds.has(e.id)) return false;
@@ -112,17 +106,7 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
 
       <div className="flex-1 flex min-h-0">
         <aside className="w-48 shrink-0 bg-white border-r border-slate-200 flex flex-col">
-          <div className="p-3">
-            <button
-              type="button"
-              onClick={() => setCompose(true)}
-              className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-medium py-2 shadow-product transition-colors"
-            >
-              <Icon name="pen" size={13} />
-              写邮件
-            </button>
-          </div>
-          <nav className="px-2 space-y-0.5">
+          <nav className="px-2 pt-3 space-y-0.5">
             {folders.map((f) => {
               const active = f.key != null && folder === f.key;
               return (
@@ -308,67 +292,6 @@ export default function MailClient({ simState, messages, onSend, onAct, onResetC
           empty="可协助处理收件箱、起草回复或总结当前邮件。"
         />
       </div>
-
-      {compose && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[13px] font-semibold text-slate-900">加入收件箱</div>
-              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setCompose(false)}>
-                <Icon name="x" size={14} />
-              </button>
-            </div>
-            <label className="block text-[12px] text-slate-500">
-              发件人
-              <input
-                value={fromAddr}
-                onChange={(e) => setFromAddr(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
-                placeholder="name@example.com"
-              />
-            </label>
-            <label className="block text-[12px] text-slate-500">
-              主题
-              <input
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
-              />
-            </label>
-            <label className="block text-[12px] text-slate-500">
-              正文
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={8}
-                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono"
-              />
-            </label>
-            {composeErr && <div className="text-[12px] text-red-600">{composeErr}</div>}
-            <button
-              type="button"
-              disabled={composeBusy || !onAct}
-              onClick={() => {
-                if (!onAct) return;
-                setComposeBusy(true);
-                setComposeErr(null);
-                onAct("import_email", { from: fromAddr, subject, body })
-                  .then(() => {
-                    setCompose(false);
-                    setFromAddr("");
-                    setSubject("");
-                    setBody("");
-                  })
-                  .catch((e) => setComposeErr(e instanceof Error ? e.message : String(e)))
-                  .finally(() => setComposeBusy(false));
-              }}
-              className="w-full rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] py-2"
-            >
-              {composeBusy ? "加入中…" : "加入收件箱"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

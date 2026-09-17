@@ -34,6 +34,13 @@ export function Workspace({
   const [missionOpen, setMissionOpen] = useState(false);
   const [toast, setToast] = useState<Observation[]>([]);
   const [worldError, setWorldError] = useState<string | null>(null);
+  // 外部来信（攻击者投递）：仅邮件产品，模拟从任意发件人向本收件箱投信
+  const [extOpen, setExtOpen] = useState(false);
+  const [extFrom, setExtFrom] = useState("");
+  const [extSubject, setExtSubject] = useState("");
+  const [extBody, setExtBody] = useState("");
+  const [extBusy, setExtBusy] = useState(false);
+  const [extErr, setExtErr] = useState<string | null>(null);
   const seenPassed = useRef<Set<string>>(new Set());
   const passedPrimed = useRef(false);
   const busyRef = useRef(false);
@@ -155,6 +162,23 @@ export function Workspace({
     [ready, targetId],
   );
 
+  const deliverExtMail = useCallback(() => {
+    setExtBusy(true);
+    setExtErr(null);
+    api
+      .act(targetId, "import_email", { from: extFrom, subject: extSubject, body: extBody })
+      .then(() => api.sim(targetId))
+      .then((state) => {
+        setSimState(state);
+        setExtOpen(false);
+        setExtFrom("");
+        setExtSubject("");
+        setExtBody("");
+      })
+      .catch((e) => setExtErr(e instanceof Error ? e.message : String(e)))
+      .finally(() => setExtBusy(false));
+  }, [targetId, extFrom, extSubject, extBody]);
+
   const resetChat = useCallback(() => {
     if (!ready || busy) return;
     const prev = messages;
@@ -264,6 +288,17 @@ export function Workspace({
             防护 {appliedDefenses.size}
           </Link>
         )}
+        {targetId === "mail_agent" && (
+          <button
+            type="button"
+            className="chip hover:text-slate-100"
+            title="以任意发件人身份向本收件箱投递一封邮件（模拟外部来信，攻击者视角）"
+            onClick={() => setExtOpen(true)}
+          >
+            <Icon name="external-link" size={10} />
+            外部来信
+          </button>
+        )}
         <LlmBadge model={meta.llm_model} />
         <button
           type="button"
@@ -317,6 +352,57 @@ export function Workspace({
           </div>
         )}
       </div>
+
+      {targetId === "mail_agent" && extOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[13px] font-semibold text-slate-900">外部来信（攻击者投递）</div>
+              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setExtOpen(false)}>
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+            <p className="text-[12px] leading-relaxed text-slate-500">
+              以任意发件人身份向本收件箱投递一封邮件。现实中这封信从攻击者自己的服务器发出，落进受害者邮箱时与普通来信毫无区别。
+            </p>
+            <label className="block text-[12px] text-slate-500">
+              发件人
+              <input
+                value={extFrom}
+                onChange={(e) => setExtFrom(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
+                placeholder="name@example.com"
+              />
+            </label>
+            <label className="block text-[12px] text-slate-500">
+              主题
+              <input
+                value={extSubject}
+                onChange={(e) => setExtSubject(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
+              />
+            </label>
+            <label className="block text-[12px] text-slate-500">
+              正文
+              <textarea
+                value={extBody}
+                onChange={(e) => setExtBody(e.target.value)}
+                rows={8}
+                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono"
+              />
+            </label>
+            {extErr && <div className="text-[12px] text-red-600">{extErr}</div>}
+            <button
+              type="button"
+              disabled={extBusy || !extFrom.trim() || !extSubject.trim()}
+              onClick={deliverExtMail}
+              className="w-full rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] py-2"
+            >
+              {extBusy ? "投递中…" : "投递到收件箱"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast.length > 0 && <CaptureToast items={toast} targetId={targetId} onClose={() => setToast([])} />}
     </div>
