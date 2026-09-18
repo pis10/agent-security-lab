@@ -1,27 +1,25 @@
 # agent-security-lab · AI 红队靶场
 
-**AI Red Team Lab** — 一个开源的 Agent 安全实战靶场。四套仿真业务产品、五关渐进式课程，覆盖 LLM Agent 从传统 Web 漏洞到 MCP 认证链的主流攻击面。
+**AI Red Team Lab** —— 一个开源的 Agent 安全实战靶场：四套仿真业务产品，五关渐进式课程，覆盖 LLM Agent 从传统 Web 漏洞到 MCP 认证链的主流攻击面。
 
 [![CI](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A524-green)](package.json)
 [![Docker](https://img.shields.io/badge/deploy-docker%20compose-2496ED)](compose.yaml)
 
-> ⚠️ 本项目仅用于本地安全学习与明确授权的安全测试。请勿对任何真实系统使用课程中的攻击手法。
+> ⚠️ 仅限本地安全学习与明确授权的安全测试。请勿对任何真实系统使用课程中的攻击手法。
 
-| 靶场 | 教学 | 产品工作台 | 观测 |
-|---|---|---|---|
-| ![靶场首页](docs/screenshots/home.png) | ![课程列表](docs/screenshots/learn.png) | ![客服工作台](docs/screenshots/product-support.png) | ![观测页](docs/screenshots/observe.png) |
+<p align="center">
+  <img src="docs/screenshots/product-support.png" width="920" alt="橙犀客服工作台——内置 AI 助手的仿真业务系统">
+</p>
 
-## 为什么做这个
+## 这是什么
 
-大模型 Agent 把「对话」变成了「操作」：查数据库、执行命令、发邮件、调用第三方工具。攻击面随之从 UI 层转移到**工具层**——提示注入、越权调用、凭据重放、记忆投毒，这些是新问题，但团队往往不知道从哪练起。
+大模型 Agent 把「对话」变成了「操作」：查数据库、执行命令、发邮件、调用第三方工具。攻击面随之从界面层转移到工具层——提示注入、越权调用、凭据重放、记忆投毒。这个项目把这些攻击面做成了可以动手打的关卡：
 
-agent-security-lab 把这些攻击面做成可以动手打的关卡。和阅读漏洞报告相比，在这里你会：
-
-- **以证据定通关**。通关不看模型的口头回答，看工具的实际执行与外发记录：越权返回的 `tenant_b` 工单行、命令执行输出的 `uid=`、元数据接口吐出的 RAM 临时凭证、外发邮件里的攻击者归档地址。
-- **打真实闭环**。L4 记忆投毒里，投毒规则随正常业务邮件外发；L5 里，签发给构件仓库的会话凭据被重放到漏验 audience 的数据平台。每条路径都是完整的攻击链。
-- **打完学防御**。每关配套防护开关（租户隔离、命令白名单、出站白名单、写入审批、audience 校验），开启后复测同一攻击，观察拦截记录。
+- **仿真产品，不是表单**。四个可真实操作的业务系统（客服后台、云运维控制台、企业邮箱、MCP 工具市场），有漏洞的 AI 助手就藏在里面；
+- **以证据定通关**。不看模型的口头回答，看工具的实际执行与外发记录：越权返回的工单行、命令执行输出的 `uid=`、元数据接口吐出的临时凭证、外发邮件里的攻击者归档地址；
+- **打完学防御**。每关配套防护开关（租户隔离、命令白名单、出站白名单、写入审批、audience 校验），开启后复测同一攻击，在观测页看它被拦截。
 
 ## 关卡
 
@@ -59,19 +57,52 @@ ASL_LLM_MODEL=claude-sonnet-4-6
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-支持 `openai` / `anthropic` / `openrouter` 等 [Pi](https://github.com/earendil-works/pi) 内建目录中的厂商，本地模型（Ollama 等）或目录外的网关通过 `models.json` 声明，见 `.env.example` 注释。
+支持 `openai` / `anthropic` / `openrouter` 等 [Pi](https://github.com/earendil-works/pi) 内建目录中的厂商；本地模型（Ollama 等）或目录外的网关通过 `models.json` 声明，见 `.env.example` 注释。
 
 > 建议选能力中上的模型：模型太弱会自己拒绝攻击指令，打不动关卡。
+
+## 界面预览
+
+<details>
+<summary><b>点击展开全部界面截图</b></summary>
+
+**靶场首页** —— 四套仿真产品，从这里选择目标
+
+<img src="docs/screenshots/home.png" width="920" alt="靶场首页">
+
+**教学** —— 每关的原理、目标与答案
+
+<img src="docs/screenshots/learn.png" width="920" alt="教学课程列表">
+
+**课程详情** —— 原理 / 目标 / 通关条件 / 答案 / 防护
+
+<img src="docs/screenshots/lesson.png" width="920" alt="课程详情">
+
+**观测** —— 助手的调用时间线、外发箱与防护开关
+
+<img src="docs/screenshots/observe.png" width="920" alt="观测页">
+
+**CloudOps 云运维控制台**
+
+<img src="docs/screenshots/product-ops.png" width="920" alt="CloudOps 云运维控制台">
+
+**Northstar MCP Hub 工具市场**
+
+<img src="docs/screenshots/product-mcp.png" width="920" alt="Northstar MCP Hub 工具市场">
+
+</details>
 
 ## 怎么玩
 
 应用有三个入口：
 
-- **靶场 `/`** — 四套可交互的仿真业务系统（客服后台、云运维控制台、企业邮箱、MCP 工具市场），通过内置助手完成日常工作。
-- **教学 `/learn`** — 每关的原理、目标、通关条件与答案，卡住了再看答案。
-- **观测 `/observe`** — 助手的完整调用时间线、外发箱（邮件 / HTTP / 内网）、防护开关与通关判定。
+- **靶场 `/`** —— 打开仿真产品，通过内置助手完成日常工作；
+- **教学 `/learn`** —— 每关的原理、目标、通关条件与答案，卡住了再看答案；
+- **观测 `/observe`** —— 助手的完整调用时间线、外发箱（邮件 / HTTP / 内网）、防护开关与通关判定。
 
-推荐节奏：教学页读原理 → 产品里动手 → 通关后到观测页开防护 → 回产品清空对话复测，确认攻击被拦截。所有数据（对话、轨迹、通关进度）存在 Docker 卷里，`docker compose down -v` 一键清零。
+推荐节奏：教学页读原理 → 产品里动手 → 通关后到观测页开防护 → 回产品清空对话复测，确认攻击被拦截。
+
+所有数据（对话、轨迹、通关进度）存在 Docker 卷里，`docker compose down -v` 一键清零。
 
 ## 架构
 
@@ -101,10 +132,10 @@ data/seeds/     产品种子数据
 课程按 L1→L5 顺序设计，单关 15–40 分钟。组织内训时的一些建议：
 
 - 先只给靶场不给教学页，让学员自己发现攻击路径，再对照答案复盘；
-- L2/L3 同一产品两关，可对比「经典注入」与「SSRF 打元数据」的防御差异；
-- L5 适合结合 OWASP 对 LLM03（Supply Chain）/ 越权类的讨论展开。
+- L2 / L3 同一产品两关，可对比「经典注入」与「SSRF 打元数据」的防御差异；
+- L5 适合结合 OWASP 对 LLM 供应链与越权类风险的讨论展开。
 
-## 贡献
+## 参与贡献
 
 欢迎提 Issue 和 PR。新增关卡请参考 `src/scenarios/` 现有结构：一个场景 = 原理 / 目标 / 答案 / 断言 / 防护，产品放在 `src/targets/`。提交前跑 `corepack pnpm check && corepack pnpm build`。
 
