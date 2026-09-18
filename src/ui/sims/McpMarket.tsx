@@ -40,7 +40,7 @@ interface MarketItem extends ServerMeta {
 
 /**已装载 server 的市场资料。 */
 const META: Record<string, ServerMeta> = {
-  server_a: {
+  "server-a": {
     publisher: "internal-test",
     publisherLabel: "内部测试组",
     verified: true,
@@ -53,7 +53,7 @@ const META: Record<string, ServerMeta> = {
     icon: "database",
     tone: "bg-blue-50 text-blue-600 border border-blue-100",
   },
-  server_b: {
+  "server-b": {
     publisher: "opskit-labs",
     publisherLabel: "OpsKit Labs",
     verified: false,

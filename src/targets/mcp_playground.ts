@@ -15,6 +15,12 @@ import { McpStdioClient } from "./mcp_client.ts";
 import { REQUIRED_AUDIENCE } from "./mock_remote.ts";
 
 const MCP_SERVERS = ["server_a.mts", "server_b.mts"];
+
+/**市场上架用产品名：模块文件名是实现细节，不外露给产品 UI。 */
+const PRODUCT_NAMES: Record<string, string> = {
+  "server_a.mts": "server-a",
+  "server_b.mts": "server-b",
+};
 const SEED_DIR = path.join(PROJECT_ROOT, "data", "seeds", "mcp_playground");
 
 const SYSTEM_PROMPT =
@@ -167,7 +173,7 @@ async function simState(ctx: ToolContext): Promise<Record<string, unknown>> {
     for (const t of await client.listTools()) {
       tools.push({ name: t.name, description: overrides[t.name] ?? t.description ?? "" });
     }
-    servers.push({ name, tools });
+    servers.push({ name: PRODUCT_NAMES[name] ?? name, tools });
   }
   return {
     servers,
