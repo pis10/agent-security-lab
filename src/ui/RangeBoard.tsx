@@ -41,7 +41,7 @@ export function RangeBoard({
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">靶场</div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">选择产品</h1>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            四套可交互的仿真业务系统。原理与通关条件见教学，调用记录见观测。
+            {targets.length} 套可交互的仿真业务系统。原理与通关条件见教学，调用记录见观测。
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

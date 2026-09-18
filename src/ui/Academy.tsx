@@ -44,7 +44,7 @@ export function Academy({
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">教学</div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">课程</h1>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            请按 L1 至 L5 顺序进行。先阅读本关目标与原理，再进入产品尝试；遇到困难时再查看答案。
+            请按关卡编号顺序进行。先阅读本关目标与原理，再进入产品尝试；遇到困难时再查看答案。
           </p>
           <div className="mt-3 text-[13px] text-slate-400">
             已完成 {captured}/{scenarios.length}

@@ -1,6 +1,6 @@
 # agent-security-lab · AI 红队靶场
 
-**AI Red Team Lab** —— 一个开源的 Agent 安全实战靶场：四套仿真业务产品，五关渐进式课程，覆盖 LLM Agent 从传统 Web 漏洞到 MCP 认证链的主流攻击面。
+**AI Red Team Lab** —— 一个开源的 Agent 安全实战靶场：在仿真业务产品中动手攻防，覆盖 LLM Agent 从传统 Web 漏洞到 MCP 认证链的主流攻击面。
 
 [![CI](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -17,7 +17,7 @@
 
 大模型 Agent 把「对话」变成了「操作」：查数据库、执行命令、发邮件、调用第三方工具。攻击面随之从界面层转移到工具层——提示注入、越权调用、凭据重放、记忆投毒。这个项目把这些攻击面做成了可以动手打的关卡：
 
-- **仿真产品，不是表单**。四个可真实操作的业务系统（客服后台、云运维控制台、企业邮箱、MCP 工具市场），有漏洞的 AI 助手就藏在里面；
+- **仿真产品，不是表单**。可真实操作的业务系统（客服后台、云运维控制台、企业邮箱、MCP 工具市场），有漏洞的 AI 助手就藏在里面；
 - **以证据定通关**。不看模型的口头回答，看工具的实际执行与外发记录：越权返回的工单行、命令执行输出的 `uid=`、元数据接口吐出的临时凭证、外发邮件里的攻击者归档地址；
 - **打完学防御**。每关配套防护开关（租户隔离、命令白名单、出站白名单、写入审批、audience 校验），开启后复测同一攻击，在观测页看它被拦截。
 
@@ -31,7 +31,7 @@
 | L4 | NovaMail · 企业邮箱 | 记忆投毒 | `remember` 无审批写入长期记忆 |
 | L5 | Northstar MCP Hub | JWT Audience 混淆 | 资源服务漏验凭据 `aud`，跨资源重放 |
 
-课程由浅入深：L1–L2 是经典漏洞在 Agent 工具里的新形态，L3–L5 是 Agent 特有的攻击面（服务端请求、持久记忆、MCP 认证链）。
+课程由浅入深：前两关是经典漏洞在 Agent 工具里的新形态，之后进入 Agent 特有的攻击面——服务端请求、持久记忆、MCP 认证链。
 
 ## 快速开始
 
@@ -112,8 +112,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 src/
   app/          页面与 HTTP 入口（产品 UI、/api、外发箱 /sink、仿真内网 /internal、/idp、/insights-warehouse）
   core/         Agent 循环（Pi SDK）、工具上下文、轨迹、关卡断言、外发箱
-  targets/      四个脆弱产品（系统提示词、工具、种子数据、防护）
-  scenarios/    五关课程（原理 / 目标 / 答案 / 断言 / 防护）
+  targets/      脆弱产品（系统提示词、工具、种子数据、防护）
+  scenarios/    课程（原理 / 目标 / 答案 / 断言 / 防护）
   world/        产品世界持久化（每产品一个磁盘目录）
   ui/           靶场、教学、观测与四个产品的仿真界面
 mcpservers/     MCP stdio server（构件仓库、运维手册）
@@ -129,7 +129,7 @@ data/seeds/     产品种子数据
 
 ## 用于团队培训
 
-课程按 L1→L5 顺序设计，单关 15–40 分钟。组织内训时的一些建议：
+关卡由浅入深，单关 15–40 分钟。组织内训时的一些建议：
 
 - 先只给靶场不给教学页，让学员自己发现攻击路径，再对照答案复盘；
 - L2 / L3 同一产品两关，可对比「经典注入」与「SSRF 打元数据」的防御差异；
