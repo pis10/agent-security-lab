@@ -10,8 +10,10 @@
 > ⚠️ 仅限本地安全学习与明确授权的安全测试。请勿对任何真实系统使用课程中的攻击手法。
 
 <p align="center">
-  <img src="docs/screenshots/product-support.png" width="920" alt="橙犀客服工作台——内置 AI 助手的仿真业务系统">
+  <img src="docs/screenshots/product-support.png" width="920" alt="在橙犀客服工作台里，助手未校验租户就读出了邻店工单，右上角弹出通关判定">
 </p>
+
+<p align="center"><i>让助手「查一下邻店工单 T-2001」——它真的查了，右上角弹出通关判定。</i></p>
 
 ## 这是什么
 
@@ -61,48 +63,25 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 > 建议选能力中上的模型：模型太弱会自己拒绝攻击指令，打不动关卡。
 
-## 界面预览
+## 打通一关
 
-<details>
-<summary><b>点击展开全部界面截图</b></summary>
+以 L1 工单越权为例，一关就是四步。
 
-**靶场首页** —— 四套仿真产品，从这里选择目标
+**① 选产品** —— 靶场里的每套系统都是可真实操作的业务软件，AI 助手就藏在里面。
 
-<img src="docs/screenshots/home.png" width="920" alt="靶场首页">
+<img src="docs/screenshots/home.png" width="920" alt="靶场首页：选择要打的仿真产品">
 
-**教学** —— 每关的原理、目标与答案
+**② 读关卡** —— 教学页讲清原理、目标与通关条件。通关认的是工具实际执行与外发记录，不是模型的口头回答。
 
-<img src="docs/screenshots/learn.png" width="920" alt="教学课程列表">
+<img src="docs/screenshots/lesson.png" width="920" alt="L1 课程详情：原理、目标、通关条件与答案">
 
-**课程详情** —— 原理 / 目标 / 通关条件 / 答案 / 防护
+**③ 动手攻击** —— 回到产品，像平时一样使唤助手，也像攻击者一样使唤它。就是顶部大图的那一刻：助手未校验租户，邻店工单原样读出，通关判定当场弹出。
 
-<img src="docs/screenshots/lesson.png" width="920" alt="课程详情">
+**④ 看证据** —— 观测页记录每一步调用与外发，通关判定全部来自这里的实际证据。打开防护后清空对话再复测，同一攻击会被当场拦截。
 
-**观测** —— 助手的调用时间线、外发箱与防护开关
+<img src="docs/screenshots/observe.png" width="920" alt="观测页：时间线记录 get_ticket 的调用与越权返回，下方是防护开关">
 
-<img src="docs/screenshots/observe.png" width="920" alt="观测页">
-
-**CloudOps 云运维控制台**
-
-<img src="docs/screenshots/product-ops.png" width="920" alt="CloudOps 云运维控制台">
-
-**Northstar MCP Hub 工具市场**
-
-<img src="docs/screenshots/product-mcp.png" width="920" alt="Northstar MCP Hub 工具市场">
-
-</details>
-
-## 怎么玩
-
-应用有三个入口：
-
-- **靶场 `/`** —— 打开仿真产品，通过内置助手完成日常工作；
-- **教学 `/learn`** —— 每关的原理、目标、通关条件与答案，卡住了再看答案；
-- **观测 `/observe`** —— 助手的完整调用时间线、外发箱（邮件 / HTTP / 内网）、防护开关与通关判定。
-
-推荐节奏：教学页读原理 → 产品里动手 → 通关后到观测页开防护 → 回产品清空对话复测，确认攻击被拦截。
-
-所有数据（对话、轨迹、通关进度）存在 Docker 卷里，`docker compose down -v` 一键清零。
+对话、轨迹与通关进度都在 Docker 卷里，`docker compose down -v` 一键清零。
 
 ## 架构
 
