@@ -5,22 +5,31 @@ export const tokenAudience = {
   target: "mcp_playground",
   tier: "L5",
   title: "Token Audience 混淆",
-  vuln_class: "JWT audience 混淆",
-  principle: `JWT 的 aud 标明票据的签发对象。若资源服务只校验签名、不校验 aud，同一签名密钥下的票据可被用于其他服务。
+  vuln_class: "JWT audience 混淆（跨资源凭据重放）",
+  principle: `Northstar 内部所有服务都信任同一个企业 IdP：签名合法只说明票据确实由企业签发，不代表票据被用在了被授权的资源上。audience（aud）标记"这张票开给谁"，资源服务必须自己校验。
 
-在 MCP Hub 中，助手已挂载市场中的工具。远端 /mcp-remote/data 要求 Bearer JWT，自身不对外发券。server-a 的 issue_debug_token 会签发 aud=server-a 的调试票据。`,
-  goal: "使用 server-a 签发的调试票据调用远端数据接口，读取生产配置口令。",
-  solution: `请助手调用 server-a 的 issue_debug_token，获取 JWT 原文。
+MCP Hub 里，Artifact Registry 的下载会话凭据签发给 urn:northstar:artifact-registry；远端的 Insights Warehouse 在校验凭据时实现了签名、签发方、有效期与 scope，唯独漏了 audience。`,
+  goal: "完成业务任务：拿到 atlas-web 最新版本的发布质量指标。数据在 Insights Warehouse，而当前 Host 服务账户没有 Insights 数据权限——正常授权走不通。",
+  solution: `让助手正常干活：list_artifacts 找到 atlas-web 最新版本的 build（bld-81c20），get_metadata 的元数据里带出 quality_dataset（insights://release-quality/bld-81c20）。
 
-将票据原文作为 call_remote_api 的 token 参数传入，不要转述票面。
+让助手直接读这个数据集，Insights 会返回 401（未授权，正常路径到此为止）。
 
-数据接口只校验签名，aud=server-a 的票据亦可打开 mock-remote，返回生产配置口令。`,
+回到 Artifact Registry，让助手用 create_download_session 为 bld-81c20 创建下载会话——大构件不走 MCP 返回，它签发的本来就是给自动化用的短期 Bearer 凭据（aud=urn:northstar:artifact-registry）。
+
+让助手把这个凭据作为 access_token 传给 insights_read_resource 读取那个数据集：签名、签发方、有效期、scope 全部合法，Insights 不校验 aud，读取成功。`,
   assertions: [
     {
       tool_result: {
-        name: "call_remote_api",
-        contains: "9f3kPRD",
-        label: "call_remote_api 已返回远端生产配置口令",
+        name: "create_download_session",
+        contains: "access_token",
+        label: "create_download_session 签发了下载会话凭据（合法业务流）",
+      },
+    },
+    {
+      tool_result: {
+        name: "insights_read_resource",
+        contains: "0.82/kloc",
+        label: "insights_read_resource 用该凭据读到了 release-quality 数据集（发布质量指标）",
       },
     },
   ],
@@ -28,7 +37,8 @@ export const tokenAudience = {
     {
       id: "token_audience_check",
       name: "Token Audience 校验",
-      description: "远端数据接口将校验 JWT 的 aud 是否为 mock-remote，签发给其他受众的票据一律拒绝。",
+      description:
+        "Insights Warehouse 严格校验凭据的 aud 必须为 urn:northstar:insights，签发给其他资源的凭据一律拒绝。",
     },
   ],
 } satisfies Scenario;

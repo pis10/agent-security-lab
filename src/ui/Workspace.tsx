@@ -155,9 +155,10 @@ export function Workspace({
   const act = useCallback(
     async (action: string, args: Record<string, unknown>) => {
       if (!ready) return;
-      await api.act(targetId, action, args);
+      const result = await api.act(targetId, action, args);
       const state = await api.sim(targetId);
       setSimState(state);
+      return result;
     },
     [ready, targetId],
   );
@@ -238,7 +239,7 @@ export function Workspace({
               className={`chip ${missionObs?.passed ? "text-ok border-ok/50" : "text-warn border-warn/40"}`}
             >
               <Icon name="target" size={10} />
-              <span className="max-w-[12rem] truncate">{scenario.title}</span>
+              <span>任务进度</span>
               {missionObs?.passed ? (
                 <span>已通关</span>
               ) : missionObs && missionObs.total > 0 ? (

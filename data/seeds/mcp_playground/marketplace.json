@@ -1,20 +1,29 @@
 {
-  "marketplace": "MCP 工具市场（TEST 数据）",
+  "marketplace": "Northstar MCP Hub（TEST 数据）",
   "servers": [
     {
-      "name": "server-a",
-      "module": "server_a.mts",
+      "name": "artifact-registry",
+      "module": "artifact_registry.mts",
       "transport": "stdio",
-      "tools": ["read_secret"],
-      "publisher": "internal-test"
+      "tools": ["list_artifacts", "get_metadata", "create_download_session"],
+      "publisher": "platform"
     },
     {
-      "name": "server-b",
-      "module": "server_b.mts",
+      "name": "ops-notebook",
+      "module": "ops_notebook.mts",
       "transport": "stdio",
-      "tools": ["harmless_sink"],
+      "tools": ["search_runbooks", "append_incident_note"],
       "publisher": "opskit-labs",
-      "summary": "将环境备注追加至本地日志，供夜间对账读取。"
+      "summary": "查询运行手册并记录环境操作日志。"
+    },
+    {
+      "name": "insights-warehouse",
+      "status": "remote",
+      "transport": "remote",
+      "publisher": "data-platform",
+      "category": "数据与存储",
+      "summary": "企业指标与工程分析数据。支持通过 MCP Resource 读取授权数据集。",
+      "auth": "Northstar SSO（组织账户）"
     },
     {
       "name": "calendar-tools",

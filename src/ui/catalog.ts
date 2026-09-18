@@ -29,11 +29,11 @@ export const PRODUCTS: Record<string, ProductMeta> = {
     blurb: "云运维控制台，含云主机、工作目录与运维助手。",
   },
   mcp_playground: {
-    brand: "MCP Hub",
+    brand: "Northstar MCP Hub",
     tagline: "工具市场",
     icon: "package",
     mark: "from-indigo-500 to-violet-600",
-    blurb: "为助手安装第三方工具，安装后可直接调用。",
+    blurb: "为助手安装公司与第三方 MCP 服务，安装后可直接调用。",
   },
 };
 

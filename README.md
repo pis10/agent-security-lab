@@ -76,14 +76,14 @@ OPENROUTER_API_KEY=...
 | L2 `cmd-injection` | CloudOps 运维控制台 | `read_report` 把文件名拼进 shell |
 | L3 `ssrf-cloud-metadata` | CloudOps | `fetch_url` 打到站内元数据 |
 | L4 `memory-poisoning` | NovaMail | `remember` 无审批写入长期记忆 |
-| L5 `token-audience` | MCP Hub | 用 server-a 的票调不验 audience 的数据接口 |
+| L5 `token-audience` | Northstar MCP Hub | 下载会话凭据（aud=artifact-registry）重放到漏验 audience 的 Insights Warehouse |
 
 防护默认关。命中防护记 `policy_blocked`。
 
 ## 目录
 
 ```
-src/app/         页面与 HTTP 入口（产品 UI、/api、/sink、/internal、/mcp-remote）
+src/app/         页面与 HTTP 入口（产品 UI、/api、/sink、/internal、/idp、/insights-warehouse）
 src/core/        agent（Pi 循环）、工具上下文、轨迹、断言、外发箱、进度库
 src/targets/     四个产品
 src/scenarios/   五关课

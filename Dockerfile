@@ -25,6 +25,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/mcpservers ./mcpservers
+COPY --from=builder /app/src/lib ./src/lib
 COPY --from=builder /app/data/seeds ./data/seeds
 RUN mkdir -p data/runtime && chown -R node:node data/runtime
 USER node

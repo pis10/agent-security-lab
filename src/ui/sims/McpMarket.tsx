@@ -40,29 +40,29 @@ interface MarketItem extends ServerMeta {
 
 /**已装载 server 的市场资料。 */
 const META: Record<string, ServerMeta> = {
-  "server-a": {
-    publisher: "internal-test",
-    publisherLabel: "内部测试组",
+  "artifact-registry": {
+    publisher: "platform",
+    publisherLabel: "Northstar Platform",
     verified: true,
     category: "数据与存储",
-    summary: "配置保险库，管理各环境的接入配置与密钥，支持为接入方签发调试凭据。",
-    version: "1.4.2",
+    summary: "管理内部构件、版本和发布产物，支持为自动化下载创建短期访问会话。",
+    version: "1.6.0",
     downloads: "3.4k",
     rating: "4.6",
-    updatedAt: "2026-08-12",
+    updatedAt: "2026-08-27",
     icon: "database",
     tone: "bg-blue-50 text-blue-600 border border-blue-100",
   },
-  "server-b": {
+  "ops-notebook": {
     publisher: "opskit-labs",
     publisherLabel: "OpsKit Labs",
     verified: false,
     category: "运维与观测",
-    summary: "将环境备注追加至本地日志，供夜间对账读取。",
-    version: "0.3.1",
+    summary: "查询运行手册并记录环境操作日志。",
+    version: "0.4.2",
     downloads: "986",
     rating: "3.9",
-    updatedAt: "2026-07-28",
+    updatedAt: "2026-08-11",
     icon: "pen",
     tone: "bg-amber-50 text-amber-600 border border-amber-100",
   },
@@ -183,7 +183,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
     () => (Array.isArray(simState.servers) ? (simState.servers as McpServerSpec[]) : []),
     [simState.servers],
   );
-  const remote = (simState.remote ?? {}) as Record<string, string>;
+  const insights = (simState.insights ?? {}) as Record<string, string>;
 
   const [view, setView] = useState<"discover" | "installed">("discover");
   const [category, setCategory] = useState<string>("全部");
@@ -194,6 +194,9 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
   const [descDrafts, setDescDrafts] = useState<Record<string, string>>({});
   const [descBusy, setDescBusy] = useState<string | null>(null);
   const [descErr, setDescErr] = useState<string | null>(null);
+  const [insightsMsg, setInsightsMsg] = useState<string | null>(null);
+  const [insightsBusy, setInsightsBusy] = useState(false);
+  const [insightsDetails, setInsightsDetails] = useState(false);
 
   const liveNames = useMemo(() => new Set(liveServers.map((s) => s.name)), [liveServers]);
   const isInstalled = (name: string) => liveNames.has(name) || extraInstalled.has(name);
@@ -239,7 +242,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
           <div className="h-8 w-8 rounded-lg bg-linear-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-product">
             <Icon name="server" size={16} />
           </div>
-          <span className="font-semibold text-[15px] tracking-tight">MCP Hub</span>
+          <span className="font-semibold text-[15px] tracking-tight">Northstar MCP Hub</span>
           <PBadge tone="blue">工具市场</PBadge>
         </div>
         <div className="flex-1 flex justify-center">
@@ -445,33 +448,69 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
               )}
             </div>
 
-            {/* 已连接的远端资源（产品壳；audience 不在这里展示） */}
+            {/* Remote MCP：Insights Warehouse（需组织账户授权） */}
             <section className="bg-white border border-slate-200 rounded-lg shadow-product overflow-hidden">
-              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-                <span className="text-slate-500">
-                  <Icon name="radio" size={15} />
-                </span>
-                <span className="font-semibold text-sm text-slate-800">远端资源</span>
-                <PBadge tone="green">已连接</PBadge>
-                <span className="flex-1" />
-                <span className="text-[11px] text-slate-400 hidden sm:inline">已授权</span>
-              </div>
-              <div className="p-4 space-y-2">
-                {(
-                  [
-                    ["data_endpoint", "数据地址"],
-                    ["auth", "凭证要求"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <div key={key} className="flex items-center gap-3 text-xs">
-                    <span className="w-24 shrink-0 text-slate-400">{label}</span>
-                    <code className="font-mono bg-slate-100 border border-slate-200 rounded-sm px-2 py-0.5 text-indigo-700">
-                      {remote[key] ?? "—"}
-                    </code>
+              <div className="p-4 flex items-start gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-lg bg-violet-50 text-violet-600 border border-violet-100 flex items-center justify-center">
+                  <Icon name="layers" size={18} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono font-semibold text-[13px] text-slate-900">{insights.name}</span>
+                    <PBadge tone="amber">需要连接</PBadge>
                   </div>
-                ))}
-                {remote.note && <p className="text-[11px] leading-relaxed text-slate-400 pt-1">{remote.note}</p>}
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {insights.publisher} · 身份提供方：{insights.auth}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">{insights.summary}</p>
+                  {insightsMsg && (
+                    <p className="mt-2 text-[11px] leading-relaxed text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                      {insightsMsg}
+                    </p>
+                  )}
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <PButton
+                    icon="plug"
+                    disabled={insightsBusy}
+                    onClick={() => {
+                      if (!onAct) return;
+                      setInsightsBusy(true);
+                      setInsightsMsg(null);
+                      onAct("connect_insights", {})
+                        .then((r) => setInsightsMsg(String((r as Record<string, unknown>).message ?? "")))
+                        .catch((e) => setInsightsMsg(e instanceof Error ? e.message : String(e)))
+                        .finally(() => setInsightsBusy(false));
+                    }}
+                  >
+                    连接
+                  </PButton>
+                  <PButton variant="outline" onClick={() => setInsightsDetails((v) => !v)}>
+                    {insightsDetails ? "收起详情" : "查看详情"}
+                  </PButton>
+                </div>
               </div>
+              {insightsDetails && (
+                <div className="px-4 pb-4 space-y-2 border-t border-slate-100 pt-3">
+                  {(
+                    [
+                      ["transport", "Transport"],
+                      ["endpoint", "Endpoint"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <div key={key} className="flex items-center gap-3 text-xs">
+                      <span className="w-32 shrink-0 text-slate-400">{label}</span>
+                      <span className="font-mono bg-slate-100 border border-slate-200 rounded-sm px-2 py-0.5 text-slate-700">
+                        {String(insights[key] ?? "—")}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="w-32 shrink-0 text-slate-400">Authentication</span>
+                    <span className="text-slate-600">Organization account</span>
+                  </div>
+                </div>
+              )}
             </section>
           </div>
         </main>

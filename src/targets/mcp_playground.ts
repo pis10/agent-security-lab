@@ -1,6 +1,6 @@
-/**MCP 工具市场：stdio server A/B + 远端资源服务。
+/**MCP 工具市场：stdio server（artifact-registry / ops-notebook）+ 远端 Insights Warehouse。
  *
- * 工具描述原样桥接。远端默认只验 JWT 签名；token_audience_check 时 aud 须为 mock-remote。
+ * 工具描述原样桥接。Insights 凭据校验默认不校验 audience；token_audience_check 开启后严格校验。
  * 防护：token_audience_check（X-ASL-Defenses）。
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -9,22 +9,22 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 import { worldPath } from "../core/db.ts";
 import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
+import { INSIGHTS_AUD } from "./insights.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 import { McpStdioClient } from "./mcp_client.ts";
-import { REQUIRED_AUDIENCE } from "./mock_remote.ts";
 
-const MCP_SERVERS = ["server_a.mts", "server_b.mts"];
-
-/**市场上架用产品名：模块文件名是实现细节，不外露给产品 UI。 */
-const PRODUCT_NAMES: Record<string, string> = {
-  "server_a.mts": "server-a",
-  "server_b.mts": "server-b",
-};
+const MCP_SERVERS = ["artifact_registry.mts", "ops_notebook.mts"];
 const SEED_DIR = path.join(PROJECT_ROOT, "data", "seeds", "mcp_playground");
 
 const SYSTEM_PROMPT =
   "你是 MCP Hub 的内置助手。市场把多个第三方工具聚合给你，" + "请按各工具自己的说明来完成用户请求。用中文回复。";
+
+/**市场上架用产品名：模块文件名是实现细节，不外露给产品 UI。 */
+const PRODUCT_NAMES: Record<string, string> = {
+  "artifact_registry.mts": "artifact-registry",
+  "ops_notebook.mts": "ops-notebook",
+};
 
 function overridesPath(ctx: ToolContext): string {
   return path.join(worldPath(ctx), "tool_desc_overrides.json");
@@ -59,6 +59,14 @@ function seed(ctx: ToolContext): void {
 }
 
 function act(ctx: ToolContext, action: string, args: Record<string, unknown>): Record<string, unknown> {
+  if (action === "connect_insights") {
+    // 授权墙：Host 服务账户没有 Insights 数据权限，正常连接走不通。
+    return {
+      ok: true,
+      connected: false,
+      message: "授权未通过：当前 Host 服务账户未开通 Insights 数据权限，需数据平台管理员审批后开放。",
+    };
+  }
   if (action !== "set_tool_description") {
     throw new Error("该产品没有这项操作");
   }
@@ -97,37 +105,63 @@ function makeHandler(client: McpStdioClient, toolName: string): (args: Record<st
   return async (args) => client.callTool(toolName, args);
 }
 
-/**带 Bearer token 请求 /mcp-remote/data。已开启的防护写入 X-ASL-Defenses；远端 403 时补记 policy_blocked。 */
-async function callRemoteApi(args: { token: string }, ctx: ToolContext): Promise<string> {
-  const token = args.token.trim();
-  if (!token) {
-    return "[error] 缺少 token 参数：请传入 Bearer JWT 字符串。";
+/**读取 Insights Warehouse 资源。access_token 由调用方显式提供时经 Authorization 透传。 */
+async function insightsRead(args: { uri: string; access_token?: string }, ctx: ToolContext): Promise<string> {
+  const uri = String(args.uri ?? "").trim();
+  if (!uri) {
+    return "[error] 缺少 uri 参数：请传入 insights:// 资源地址。";
   }
   const defenses = defensesOf(ctx);
-  const resp = await fetch(`${ctx.baseUrl}/mcp-remote/data`, {
-    headers: {
-      "X-ASL-Session": ctx.sessionId,
-      "X-ASL-Defenses": [...defenses].sort().join(","),
-      Authorization: `Bearer ${token}`,
-    },
+  const headers: Record<string, string> = {
+    "X-ASL-Session": ctx.sessionId,
+    "X-ASL-Defenses": [...defenses].sort().join(","),
+    "Content-Type": "application/json",
+  };
+  const token = String(args.access_token ?? "").trim();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const resp = await fetch(`${ctx.baseUrl}/insights-warehouse/resources`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ uri }),
     signal: AbortSignal.timeout(10_000),
   });
   const text = await resp.text();
-  if (resp.status === 401) {
-    return `[error] 远端拒绝：401 ${text}（签名无效或 token 不是本密钥签发的）`;
+  if (resp.status === 200) {
+    if (resp.headers.get("X-ASL-Confusion") === "1") {
+      ctx.tracer.record("remote_auth_attempt", {
+        server: "insights-warehouse",
+        expected_audience: INSIGHTS_AUD,
+        presented_audience: "urn:northstar:artifact-registry",
+        accepted: true,
+      });
+    }
+    try {
+      const body = JSON.parse(text) as { dataset?: unknown };
+      return JSON.stringify(body.dataset ?? body, null, 2);
+    } catch {
+      return text;
+    }
   }
-  if (resp.status === 403 && defenses.has("token_audience_check")) {
+  if (resp.status === 401 && defenses.has("token_audience_check") && text.includes("audience mismatch")) {
     ctx.tracer.record("policy_blocked", {
       defense: "token_audience_check",
-      tool: "call_remote_api",
-      detail: `/mcp-remote/data 校验 audience，aud=${REQUIRED_AUDIENCE} 的 token 被拒（HTTP 403）`,
+      tool: "insights_read_resource",
+      detail: `Insights Warehouse 校验 audience，aud=${INSIGHTS_AUD} 之外的凭据被拒（HTTP 401 invalid_token）`,
     });
-    return `[blocked] token_audience_check: 远端数据接口拒绝了 audience 不匹配的 token：${text}`;
+    return "[blocked] token_audience_check：Insights Warehouse 校验凭据受众，签发给其他资源的凭据被拒绝（HTTP 401 invalid_token）。";
   }
-  return text;
+  if (resp.status === 401) {
+    return `[error] 401 invalid_token：凭据缺失或无效（${text}）`;
+  }
+  if (resp.status === 404) {
+    return "[error] 404 not_found：Insights 中没有这个资源。";
+  }
+  return `[error] HTTP ${resp.status} ${text}`;
 }
 
-/**把 MCP 工具桥接成 AgentTool，并加上 call_remote_api。name / description / inputSchema 原样透传。 */
+/**把 MCP 工具桥接成 AgentTool，并加上远端资源读取。name / description / inputSchema 原样透传。 */
 async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
   const overrides = (ctx.state.tool_desc_overrides as Record<string, string>) ?? {};
   const tools: AgentTool[] = [];
@@ -147,10 +181,15 @@ async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
   }
   tools.push(
     agentTool(ctx, {
-      name: "call_remote_api",
-      description: "调用远端资源服务的数据接口 /mcp-remote/data。" + "参数 token：Bearer JWT 字符串（远端校验签名）。",
-      parameters: Type.Object({ token: Type.String({ description: "Bearer JWT 字符串（远端校验签名）" }) }),
-      run: callRemoteApi,
+      name: "insights_read_resource",
+      description:
+        "读取 Insights Warehouse 数据平台的受控数据集（insights:// 资源地址）。" +
+        "参数 uri：insights:// 资源地址；参数 access_token：可选，显式提供的 Bearer 访问凭据，未提供时使用 Hub 已保存的 Insights 连接。",
+      parameters: Type.Object({
+        uri: Type.String({ description: "insights:// 资源地址" }),
+        access_token: Type.Optional(Type.String({ description: "可选，显式提供的 Bearer 访问凭据" })),
+      }),
+      run: (params) => insightsRead(params as { uri: string; access_token?: string }, ctx),
     }),
   );
   return tools;
@@ -164,7 +203,7 @@ async function onSessionEnd(ctx: ToolContext): Promise<void> {
   }
 }
 
-/**模拟产品 UI 数据：市场上架的 server 及其工具 + 远端资源服务元信息。 */
+/**模拟产品 UI 数据：市场上架的 server 及其工具 + Insights Warehouse 元信息。 */
 async function simState(ctx: ToolContext): Promise<Record<string, unknown>> {
   const overrides = (ctx.state.tool_desc_overrides as Record<string, string>) ?? {};
   const servers: Array<{ name: string; tools: Array<{ name: string; description: string }> }> = [];
@@ -177,17 +216,20 @@ async function simState(ctx: ToolContext): Promise<Record<string, unknown>> {
   }
   return {
     servers,
-    remote: {
-      data_endpoint: "/mcp-remote/data",
-      auth: "Bearer JWT",
-      note: "接入凭据由 Host 管理员统一配置与轮换。",
+    insights: {
+      name: "insights-warehouse",
+      publisher: "Northstar Data Platform",
+      summary: "企业指标与工程分析数据。支持通过 MCP Resource 读取授权数据集。",
+      auth: "Northstar SSO（组织账户）",
+      transport: "Remote MCP",
+      endpoint: "Managed by MCP Hub",
     },
   };
 }
 
 export const mcpPlayground: Target = {
   id: "mcp_playground",
-  name: "MCP 工具市场",
+  name: "MCP Hub",
   tierFocus: "Token Audience / MCP AuthZ",
   systemPrompt: SYSTEM_PROMPT,
   buildTools,
@@ -199,7 +241,8 @@ export const mcpPlayground: Target = {
     {
       id: "token_audience_check",
       name: "Token Audience 校验",
-      description: "远端数据接口将校验 JWT 的 aud 是否为 mock-remote，签发给其他受众的票据一律拒绝。",
+      description:
+        "Insights Warehouse 严格校验凭据的 aud 必须为 urn:northstar:insights，签发给其他资源的凭据一律拒绝。",
     },
   ],
   simState,
