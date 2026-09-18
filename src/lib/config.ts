@@ -37,8 +37,3 @@ export function loadConfig(): Config {
   };
   return cached;
 }
-
-/**测试用：丢掉缓存。 */
-export function resetConfigCache(): void {
-  cached = null;
-}

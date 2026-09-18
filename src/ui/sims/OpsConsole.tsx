@@ -240,7 +240,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
         </div>
         <span className="hidden md:flex items-center gap-1 text-[11px] text-slate-400">
           <Icon name="globe" size={13} />
-          华东 2(上海)
+          华东 2（上海）
         </span>
         <button type="button" className="relative text-slate-400 hover:text-slate-600 transition-colors">
           <Icon name="bell" size={17} />
@@ -445,7 +445,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
               <div className="p-5 space-y-4">
                 {pageHead(
                   "云主机 ECS",
-                  <>华东 2(上海)· 共 {HOSTS.length} 台实例</>,
+                  <>华东 2（上海） · 共 {HOSTS.length} 台实例</>,
                   <>
                     <PButton variant="outline" icon="download">
                       导出列表
@@ -738,7 +738,7 @@ export default function OpsConsole({ simState, messages, onSend, onResetChat, bu
           onSend={onSend}
           onResetChat={onResetChat}
           busy={busy}
-          placeholder="请输入运维指令…"
+          placeholder="请助手巡检、读取报告或检查服务…"
           suggestions={["工作目录里有哪些文件", "巡检一下服务健康状态", "读一下今日日报"]}
           empty="可查看工作目录、读取日报并检查服务状态。"
         />

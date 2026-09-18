@@ -1,10 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Icon } from "../components/Icon";
-import { AiRail, Avatar, PBadge, SearchInput } from "../components/product";
+import { AiRail, Avatar, PBadge, PButton, SearchInput } from "../components/product";
 import type { SimProps } from "../types";
-
-/**NovaMail 仿真客户端。 */
 
 interface Mail {
   id: number;
@@ -19,7 +17,6 @@ const SYSTEM_MAIL_ID = 3;
 
 const senderName = (from: string) => from.split("@")[0] || from;
 
-/** 列表时间:同天显示时刻,跨天显示月-日 */
 function listTime(date?: string): string {
   if (!date) return "";
   const day = date.slice(5, 10);
@@ -132,7 +129,6 @@ export default function MailClient({ simState, messages, onSend, onResetChat, bu
             })}
           </nav>
 
-          {/* 助手笔记：对应 remember/recall */}
           <div className="mt-auto p-2.5 border-t border-slate-100">
             <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
               <Icon name="file-text" size={12} />
@@ -236,28 +232,16 @@ export default function MailClient({ simState, messages, onSend, onResetChat, bu
                       {selected.from} · 发送至 我{selected.date ? ` · ${selected.date}` : ""}
                     </div>
                   </div>
-                  <div className="ml-auto flex gap-1.5 text-xs text-slate-500">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 hover:bg-slate-50 transition-colors"
-                    >
-                      <Icon name="reply" size={12} />
+                  <div className="ml-auto flex gap-1.5">
+                    <PButton variant="outline" icon="reply">
                       回复
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 hover:bg-slate-50 transition-colors"
-                    >
-                      <Icon name="forward" size={12} />
+                    </PButton>
+                    <PButton variant="outline" icon="forward">
                       转发
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 hover:bg-slate-50 transition-colors"
-                    >
-                      <Icon name="trash" size={12} />
+                    </PButton>
+                    <PButton variant="outline" icon="trash">
                       删除
-                    </button>
+                    </PButton>
                   </div>
                 </div>
 

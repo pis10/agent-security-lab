@@ -36,7 +36,6 @@ export class ProgressDB {
     this._ensureSchema();
   }
 
-  /**db 文件缺失时建表。 */
   private _ensureSchema(): void {
     const db = connect(this._path);
     try {
@@ -54,7 +53,6 @@ export class ProgressDB {
   }
 
   recordCapture(scenarioId: string, sessionId: string, defenses: string[]): void {
-    this._ensureSchema();
     const db = connect(this._path);
     try {
       db.prepare(
@@ -66,7 +64,6 @@ export class ProgressDB {
   }
 
   captured(): Record<string, CapturedRecord> {
-    this._ensureSchema();
     const db = connect(this._path);
     try {
       const rows = db.prepare("SELECT * FROM captures ORDER BY captured_at").all() as Array<{
@@ -91,7 +88,6 @@ export class ProgressDB {
 
   clearIds(scenarioIds: string[]): void {
     if (scenarioIds.length === 0) return;
-    this._ensureSchema();
     const db = connect(this._path);
     try {
       const stmt = db.prepare("DELETE FROM captures WHERE scenario_id = ?");
@@ -102,7 +98,6 @@ export class ProgressDB {
   }
 
   clearAll(): void {
-    this._ensureSchema();
     const db = connect(this._path);
     try {
       db.exec("DELETE FROM captures");

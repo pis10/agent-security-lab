@@ -4,8 +4,6 @@ import { Icon } from "../components/Icon";
 import { AiRail, Avatar, EmptyState, PBadge, PButton, SearchInput, Stat } from "../components/product";
 import type { SimProps } from "../types";
 
-/**MCP Hub 仿真市场。工具描述全文渲染。 */
-
 interface McpToolSpec {
   name: string;
   description: string;
@@ -16,7 +14,6 @@ interface McpServerSpec {
   tools: McpToolSpec[];
 }
 
-/**市场卡片资料。 */
 interface ServerMeta {
   publisher: string;
   publisherLabel: string;
@@ -38,7 +35,6 @@ interface MarketItem extends ServerMeta {
   live: boolean;
 }
 
-/**已装载 server 的市场资料。 */
 const META: Record<string, ServerMeta> = {
   "artifact-registry": {
     publisher: "platform",
@@ -68,7 +64,6 @@ const META: Record<string, ServerMeta> = {
   },
 };
 
-/**未装载的目录条目。 */
 const CATALOG: MarketItem[] = [
   {
     name: "calendar-tools",
@@ -150,7 +145,6 @@ const CATALOG: MarketItem[] = [
   },
 ];
 
-/**未在 marketplace.json 登记的 server 展示资料。 */
 function fallbackMeta(name: string): ServerMeta {
   return {
     publisher: "unknown",
@@ -189,7 +183,6 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
   const [category, setCategory] = useState<string>("全部");
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
-  // 仅前端的安装状态（目录里未装载的条目）
   const [extraInstalled, setExtraInstalled] = useState<ReadonlySet<string>>(new Set());
   const [descDrafts, setDescDrafts] = useState<Record<string, string>>({});
   const [descBusy, setDescBusy] = useState<string | null>(null);
@@ -255,7 +248,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
         </div>
         <div className="hidden md:flex shrink-0 items-center gap-1.5 text-xs text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-3 py-1">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          已连接 Host:
+          已连接 Host：
           <span className="font-mono font-semibold text-slate-700">mcp-host.internal</span>
         </div>
         <button type="button" className="text-slate-400 hover:text-slate-600 transition-colors">
@@ -315,7 +308,6 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
             })}
           </nav>
 
-          {/* Host 连接状态卡:实时反映 simState.servers */}
           <div className="mt-auto p-2.5">
             <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-2.5">
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-800">
@@ -392,7 +384,6 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
 
                   <p className="mt-2.5 text-xs leading-relaxed text-slate-500 line-clamp-2">{it.summary}</p>
 
-                  {/* 已装载 server:描述预览(完整描述在详情抽屉) */}
                   {it.live && it.tools.length > 0 && it.tools[0].description && (
                     <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400 line-clamp-2">
                       <span className="font-mono text-indigo-500">{it.tools[0].name}</span>
@@ -448,7 +439,6 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
               )}
             </div>
 
-            {/* Remote MCP：Insights Warehouse（需组织账户授权） */}
             <section className="bg-white border border-slate-200 rounded-lg shadow-product overflow-hidden">
               <div className="p-4 flex items-start gap-3">
                 <div className="h-10 w-10 shrink-0 rounded-lg bg-violet-50 text-violet-600 border border-violet-100 flex items-center justify-center">
@@ -515,7 +505,6 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
           </div>
         </main>
 
-        {/* ── 详情抽屉:工具描述全文(攻击面)── */}
         {selected && (
           <div className="absolute inset-0 z-20">
             <div className="absolute inset-0 bg-slate-900/25" onClick={() => setSelectedName(null)} />
@@ -686,7 +675,7 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
           busy={busy}
           placeholder="请助手调用已安装的工具…"
           suggestions={["现在装了哪些工具", "这个市场可以做什么"]}
-          empty="已安装的工具可直接调用。"
+          empty="可调用已安装的工具，或查询市场信息。"
         />
       </div>
     </div>

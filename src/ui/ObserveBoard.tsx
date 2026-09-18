@@ -26,7 +26,6 @@ export function ObserveBoard({
     setWorlds(initialWorlds);
   }, [initialWorlds]);
 
-  // 仅剩一个世界时进详情
   useEffect(() => {
     if (worlds.length === 1) {
       nav.replace(`/observe/${worlds[0].target_id}`);
@@ -69,8 +68,8 @@ export function ObserveBoard({
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="mb-8">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">观测</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">观测</h1>
-          <p className="text-slate-500 text-sm mt-2 leading-relaxed">以下为已打开的产品。</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">已打开的产品</h1>
+          <p className="text-slate-500 text-sm mt-2 leading-relaxed">调用记录与外发按产品归档。</p>
         </div>
         <div className="space-y-3">
           {worlds.map((w) => {

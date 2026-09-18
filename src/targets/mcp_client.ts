@@ -69,7 +69,7 @@ export class McpStdioClient {
   private _module: string;
   private _timeoutMs: number;
 
-  /**module：mcpservers/ 下的 server 脚本名（如 server_a.mts），亦用于 ps 识别。 */
+  /**module：mcpservers/ 下的 server 脚本名（如 artifact_registry.mts），亦用于 ps 识别。 */
   constructor(module: string, timeoutMs = 15000) {
     this._module = module;
     this._timeoutMs = timeoutMs;

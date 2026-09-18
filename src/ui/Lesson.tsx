@@ -9,7 +9,6 @@ import { Shell } from "./components/Shell";
 import type { Meta, Observation, ProgressMap, Scenario, TargetInfo } from "./types";
 import { assertionLabel } from "./types";
 
-/**课程页折叠抽屉。 */
 function Drawer({
   icon,
   label,

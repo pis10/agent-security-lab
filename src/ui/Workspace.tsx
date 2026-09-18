@@ -34,7 +34,6 @@ export function Workspace({
   const [missionOpen, setMissionOpen] = useState(false);
   const [toast, setToast] = useState<Observation[]>([]);
   const [worldError, setWorldError] = useState<string | null>(null);
-  // 外部来信（攻击者投递）：仅邮件产品，模拟从任意发件人向本收件箱投信
   const [extOpen, setExtOpen] = useState(false);
   const [extFrom, setExtFrom] = useState("");
   const [extSubject, setExtSubject] = useState("");
