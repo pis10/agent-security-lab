@@ -9,9 +9,9 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 import { worldPath } from "../core/db.ts";
 import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
-import { INSIGHTS_AUD } from "./insights.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
+import { INSIGHTS_AUD } from "./insights.ts";
 import { McpStdioClient } from "./mcp_client.ts";
 
 const MCP_SERVERS = ["artifact_registry.mts", "ops_notebook.mts"];

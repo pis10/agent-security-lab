@@ -1,4 +1,5 @@
-/**可选扩展：本项目 models.json 子集（自定义网关 / 本地模型）。 */
+/**可选扩展：本项目 models.json 子集（自定义网关 / 本地模型）。
+ * api 仅支持 openai-completions / anthropic-messages；模型字段按 Pi 原生 Model 透传，缺省给最小默认。 */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -9,15 +10,30 @@ import {
   type MutableModels,
   type ProviderAuth,
 } from "@earendil-works/pi-ai";
-import * as anthropicMessages from "@earendil-works/pi-ai/api/anthropic-messages";
-import * as openaiCompletions from "@earendil-works/pi-ai/api/openai-completions";
+import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
 const CUSTOM_APIS = {
-  "openai-completions": openaiCompletions,
-  "anthropic-messages": anthropicMessages,
+  "openai-completions": openAICompletionsApi,
+  "anthropic-messages": anthropicMessagesApi,
 } as const;
 
 type CustomApi = keyof typeof CUSTOM_APIS;
+
+/**models.json 的模型条目：Pi 原生 Model 字段全可写，缺省按最小可用补。 */
+export interface ModelsJsonModel {
+  id?: string;
+  name?: string;
+  reasoning?: boolean;
+  input?: Array<"text" | "image">;
+  cost?: Model<Api>["cost"];
+  contextWindow?: number;
+  maxTokens?: number;
+  thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
+  samplingParams?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  compat?: Record<string, unknown>;
+}
 
 export interface ModelsJsonSubset {
   providers?: Record<
@@ -26,7 +42,8 @@ export interface ModelsJsonSubset {
       baseUrl?: string;
       api?: string;
       apiKey?: string;
-      models?: Array<{ id?: string }>;
+      headers?: Record<string, string>;
+      models?: ModelsJsonModel[];
     }
   >;
 }
@@ -48,18 +65,23 @@ function staticOrEnvApiKey(raw: string): ApiKeyAuth {
   };
 }
 
-function customModel(providerId: string, modelId: string, api: CustomApi, baseUrl: string): Model<Api> {
+function customModel(providerId: string, api: CustomApi, baseUrl: string, spec: ModelsJsonModel): Model<Api> {
+  const id = spec.id?.trim() ?? "";
   return {
-    id: modelId,
-    name: modelId,
+    id,
+    name: spec.name ?? id,
     api,
     provider: providerId,
     baseUrl,
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128_000,
-    maxTokens: 8192,
+    reasoning: spec.reasoning ?? false,
+    input: spec.input ?? ["text"],
+    cost: spec.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: spec.contextWindow ?? 128_000,
+    maxTokens: spec.maxTokens ?? 8192,
+    ...(spec.thinkingLevelMap !== undefined ? { thinkingLevelMap: spec.thinkingLevelMap } : {}),
+    ...(spec.samplingParams !== undefined ? { samplingParams: spec.samplingParams } : {}),
+    ...(spec.headers !== undefined ? { headers: spec.headers } : {}),
+    ...(spec.compat !== undefined ? { compat: spec.compat as Model<Api>["compat"] } : {}),
   };
 }
 
@@ -84,8 +106,8 @@ export function applyModelsJson(models: MutableModels, spec: ModelsJsonSubset): 
         `models.json providers.${id} 的 api 不受支持：${api}（仅 openai-completions / anthropic-messages）`,
       );
     }
-    const modelIds = (provider.models ?? []).map((m) => m.id?.trim()).filter((m): m is string => !!m);
-    if (modelIds.length === 0) {
+    const modelSpecs = (provider.models ?? []).filter((m) => m.id?.trim());
+    if (modelSpecs.length === 0) {
       throw new Error(`models.json providers.${id} 至少需要一个 models[].id`);
     }
     const auth: ProviderAuth = { apiKey: staticOrEnvApiKey(provider.apiKey ?? "") };
@@ -94,9 +116,10 @@ export function applyModelsJson(models: MutableModels, spec: ModelsJsonSubset): 
         id,
         name: id,
         baseUrl,
+        ...(provider.headers !== undefined ? { headers: provider.headers } : {}),
         auth,
-        models: modelIds.map((modelId) => customModel(id, modelId, api as CustomApi, baseUrl)),
-        api: CUSTOM_APIS[api as CustomApi],
+        models: modelSpecs.map((spec) => customModel(id, api as CustomApi, baseUrl, spec)),
+        api: CUSTOM_APIS[api as CustomApi](),
       }),
     );
   }

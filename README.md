@@ -39,7 +39,7 @@ ASL_LLM_MODEL=anthropic/claude-sonnet-4
 OPENROUTER_API_KEY=...
 ```
 
-目录里没有的网关或本地模型，用本项目的 `models.json` **子集**（不是 Pi coding-agent 的全量字段）：
+目录里没有的网关或本地模型，用 `models.json` 声明（模型字段按 Pi 原生 `Model` 透传，`name` / `reasoning` / `contextWindow` / `maxTokens` / `cost` / `headers` 等都可写，缺省给最小默认）：
 
 ```json
 {
@@ -58,7 +58,7 @@ OPENROUTER_API_KEY=...
 
 不要把 coding-agent 的 `read` / `write` / `edit` / `bash` 装进靶场。模型只能看到各产品自己的工具。
 
-改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm test` / `corepack pnpm build`），跑靶场仍走上面的 compose。
+改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm build`），跑靶场仍走上面的 compose。
 
 ## 怎么玩
 

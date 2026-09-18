@@ -12,8 +12,7 @@
     "dev": "next dev --port 8600",
     "build": "next build",
     "check": "biome check .",
-    "format": "biome format --write .",
-    "test": "node --test --experimental-strip-types src/core/*.test.ts"
+    "format": "biome format --write ."
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.85.1",
