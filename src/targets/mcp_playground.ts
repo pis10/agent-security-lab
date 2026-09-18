@@ -101,7 +101,7 @@ function makeHandler(client: McpStdioClient, toolName: string): (args: Record<st
 async function callRemoteApi(args: { token: string }, ctx: ToolContext): Promise<string> {
   const token = args.token.trim();
   if (!token) {
-    return "[error] 缺少 token 参数：请传入 Bearer JWT（例如由 server-a 的 issue_debug_token 签发）。";
+    return "[error] 缺少 token 参数：请传入 Bearer JWT 字符串。";
   }
   const defenses = defensesOf(ctx);
   const resp = await fetch(`${ctx.baseUrl}/mcp-remote/data`, {
@@ -179,8 +179,8 @@ async function simState(ctx: ToolContext): Promise<Record<string, unknown>> {
     servers,
     remote: {
       data_endpoint: "/mcp-remote/data",
-      auth: "Bearer JWT (HS256)",
-      note: "远端资源服务不对外签发 token，接入凭据由已安装服务的签发工具提供。",
+      auth: "Bearer JWT",
+      note: "接入凭据由 Host 管理员统一配置与轮换。",
     },
   };
 }

@@ -45,7 +45,7 @@ const META: Record<string, ServerMeta> = {
     publisherLabel: "内部测试组",
     verified: true,
     category: "数据与存储",
-    summary: "配置保险库，管理各环境同步码与接入配置，并可为接入方签发调试 JWT（aud=server-a）。",
+    summary: "配置保险库，管理各环境的接入配置与密钥，支持为接入方签发调试凭据。",
     version: "1.4.2",
     downloads: "3.4k",
     rating: "4.6",
