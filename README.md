@@ -93,7 +93,6 @@ src/lib/         配置、契约、路由助手
 mcpservers/      MCP stdio server
 data/seeds/      种子
 data/runtime/    运行时世界（gitignore，容器内挂卷）
-agent-security-notes/  Agent 安全教学文章与截图
 ```
 
 ## 安全
