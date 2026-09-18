@@ -1,31 +1,57 @@
 # agent-security-lab · AI 红队靶场
 
-四个脆弱产品、五关课程。通关以工具实际执行与数据外发为准。
+**AI Red Team Lab** — 一个开源的 Agent 安全实战靶场。四套仿真业务产品、五关渐进式课程，覆盖 LLM Agent 从传统 Web 漏洞到 MCP 认证链的主流攻击面。
 
-> 仅限本地学习与明确授权的安全测试。通关认的是工具结果与外发记录里的实际证据：越权返回的 `tenant_b` 工单行、命令执行输出的 `uid=`、元数据接口返回的 RAM 临时凭证（仿真 STS AccessKeyId，如 `STS.N4aBExample4CloudOps`）、远端配置口令本身。
+[![CI](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A524-green)](package.json)
+[![Docker](https://img.shields.io/badge/deploy-docker%20compose-2496ED)](compose.yaml)
 
-## 运行
+> ⚠️ 本项目仅用于本地安全学习与明确授权的安全测试。请勿对任何真实系统使用课程中的攻击手法。
 
-唯一部署方式是 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。容器里才有 `cat` / `id` 这条命令注入面。
+| 靶场 | 教学 | 产品工作台 | 观测 |
+|---|---|---|---|
+| ![靶场首页](docs/screenshots/home.png) | ![课程列表](docs/screenshots/learn.png) | ![客服工作台](docs/screenshots/product-support.png) | ![观测页](docs/screenshots/observe.png) |
 
-模型走 [Pi](https://github.com/earendil-works/pi) 的 `pi-ai` / `pi-agent-core`：协议与目录由 SDK 处理，进程直连厂商 API。模型目录用 Pi 包内清单，换模型 id 靠升级 Pi。
+## 为什么做这个
+
+大模型 Agent 把「对话」变成了「操作」：查数据库、执行命令、发邮件、调用第三方工具。攻击面随之从 UI 层转移到**工具层**——提示注入、越权调用、凭据重放、记忆投毒，这些是新问题，但团队往往不知道从哪练起。
+
+agent-security-lab 把这些攻击面做成可以动手打的关卡。和阅读漏洞报告相比，在这里你会：
+
+- **以证据定通关**。通关不看模型的口头回答，看工具的实际执行与外发记录：越权返回的 `tenant_b` 工单行、命令执行输出的 `uid=`、元数据接口吐出的 RAM 临时凭证、外发邮件里的攻击者归档地址。
+- **打真实闭环**。L4 记忆投毒里，投毒规则随正常业务邮件外发；L5 里，签发给构件仓库的会话凭据被重放到漏验 audience 的数据平台。每条路径都是完整的攻击链。
+- **打完学防御**。每关配套防护开关（租户隔离、命令白名单、出站白名单、写入审批、audience 校验），开启后复测同一攻击，观察拦截记录。
+
+## 关卡
+
+| 关 | 产品 | 攻击面 | 关键缺陷 |
+|---|---|---|---|
+| L1 | 橙犀 · 客服工作台 | 越权访问（IDOR） | `get_ticket` 按 ID 取行，不校验租户 |
+| L2 | CloudOps · 运维控制台 | 命令注入 | `read_report` 把文件名拼进 shell |
+| L3 | CloudOps · 运维控制台 | SSRF（云元数据） | `fetch_url` 可达链路本地的元数据接口 |
+| L4 | NovaMail · 企业邮箱 | 记忆投毒 | `remember` 无审批写入长期记忆 |
+| L5 | Northstar MCP Hub | JWT Audience 混淆 | 资源服务漏验凭据 `aud`，跨资源重放 |
+
+课程由浅入深：L1–L2 是经典漏洞在 Agent 工具里的新形态，L3–L5 是 Agent 特有的攻击面（服务端请求、持久记忆、MCP 认证链）。
+
+## 快速开始
+
+唯一依赖是 Docker：
 
 ```bash
-cp .env.example .env
-# 默认：ASL_LLM_PROVIDER=zai-coding-cn，填 ZAI_CODING_CN_API_KEY
+git clone https://github.com/pis10/agent-security-lab.git
+cd agent-security-lab
+
+cp .env.example .env        # 填入你的模型 API Key
 docker compose up -d --build
-# http://127.0.0.1:8600
 ```
 
-`.env` 只放本机，compose 注入容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。升级后若对话无法恢复，对该产品重置即可（旧 transcript 格式不转换）。
+打开 `http://127.0.0.1:8600`，从教学页 L1 开始。
 
-换厂商只改 `ASL_LLM_PROVIDER`、`ASL_LLM_MODEL` 和该厂商的原生 Key，例如：
+### 配置模型
 
-```bash
-ASL_LLM_PROVIDER=openai
-ASL_LLM_MODEL=gpt-4.1-mini
-OPENAI_API_KEY=sk-...
-```
+默认使用 Z.AI（GLM），在 `.env` 里填对应的 Key 即可。换厂商只改三行：
 
 ```bash
 ASL_LLM_PROVIDER=anthropic
@@ -33,71 +59,59 @@ ASL_LLM_MODEL=claude-sonnet-4-6
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-```bash
-ASL_LLM_PROVIDER=openrouter
-ASL_LLM_MODEL=anthropic/claude-sonnet-4
-OPENROUTER_API_KEY=...
-```
+支持 `openai` / `anthropic` / `openrouter` 等 [Pi](https://github.com/earendil-works/pi) 内建目录中的厂商，本地模型（Ollama 等）或目录外的网关通过 `models.json` 声明，见 `.env.example` 注释。
 
-目录里没有的网关或本地模型，用 `models.json` 声明（模型字段按 Pi 原生 `Model` 透传，`name` / `reasoning` / `contextWindow` / `maxTokens` / `cost` / `headers` 等都可写，缺省给最小默认）：
-
-```json
-{
-  "providers": {
-    "ollama": {
-      "baseUrl": "http://host.docker.internal:11434/v1",
-      "api": "openai-completions",
-      "apiKey": "ollama",
-      "models": [{ "id": "qwen2.5-coder:7b" }]
-    }
-  }
-}
-```
-
-`ASL_MODELS_JSON` 指向该文件，`ASL_LLM_PROVIDER=ollama`，`ASL_LLM_MODEL=qwen2.5-coder:7b`。`api` 仅支持 `openai-completions` 与 `anthropic-messages`；`apiKey` 可以是字面量或 `$ENV_VAR`。
-
-不要把 coding-agent 的 `read` / `write` / `edit` / `bash` 装进靶场。模型只能看到各产品自己的工具。
-
-改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm build`），跑靶场仍走上面的 compose。
+> 建议选能力中上的模型：模型太弱会自己拒绝攻击指令，打不动关卡。
 
 ## 怎么玩
 
-| 入口 | 地址 | 用途 |
-|---|---|---|
-| 靶场 | `/` | 打开仿真产品 |
-| 教学 | `/learn` | 原理、目标、答案、通关条件 |
-| 观测 | `/observe` | 工具调用、外发箱、防护开关 |
+应用有三个入口：
 
-按 L1 至 L5 进行。请先在教学页阅读原理与目标，再进入产品尝试；必要时查看答案。观测中开启防护后，返回产品清空对话再试（无需重置；重置会清除当前课程的通关记录）。产品「重置」清除该产品数据及当前课程的通关进度，同产品其他课程不受影响；顶栏「全部重置」恢复整个靶场。切换课程会重置对应产品。
+- **靶场 `/`** — 四套可交互的仿真业务系统（客服后台、云运维控制台、企业邮箱、MCP 工具市场），通过内置助手完成日常工作。
+- **教学 `/learn`** — 每关的原理、目标、通关条件与答案，卡住了再看答案。
+- **观测 `/observe`** — 助手的完整调用时间线、外发箱（邮件 / HTTP / 内网）、防护开关与通关判定。
 
-| 关 | 产品 | 攻击面 |
-|---|---|---|
-| L1 `ticket-idor` | 橙犀客服后台 | `get_ticket` 不校验租户 |
-| L2 `cmd-injection` | CloudOps 运维控制台 | `read_report` 把文件名拼进 shell |
-| L3 `ssrf-cloud-metadata` | CloudOps | `fetch_url` 打到站内元数据 |
-| L4 `memory-poisoning` | NovaMail | `remember` 无审批写入长期记忆 |
-| L5 `token-audience` | Northstar MCP Hub | 下载会话凭据（aud=artifact-registry）重放到漏验 audience 的 Insights Warehouse |
+推荐节奏：教学页读原理 → 产品里动手 → 通关后到观测页开防护 → 回产品清空对话复测，确认攻击被拦截。所有数据（对话、轨迹、通关进度）存在 Docker 卷里，`docker compose down -v` 一键清零。
 
-防护默认关。命中防护记 `policy_blocked`。
+## 架构
 
-## 目录
+单体 Next.js 应用，Agent 循环与工具执行全部在服务端：
 
 ```
-src/app/         页面与 HTTP 入口（产品 UI、/api、/sink、/internal、/idp、/insights-warehouse）
-src/core/        agent（Pi 循环）、工具上下文、轨迹、断言、外发箱、进度库
-src/targets/     四个产品
-src/scenarios/   五关课
-src/world/       产品世界
-src/ui/          客户端界面
-src/lib/         配置、契约、路由助手
-mcpservers/      MCP stdio server
-data/seeds/      种子
-data/runtime/    运行时世界（gitignore，容器内挂卷）
+src/
+  app/          页面与 HTTP 入口（产品 UI、/api、外发箱 /sink、仿真内网 /internal、/idp、/insights-warehouse）
+  core/         Agent 循环（Pi SDK）、工具上下文、轨迹、关卡断言、外发箱
+  targets/      四个脆弱产品（系统提示词、工具、种子数据、防护）
+  scenarios/    五关课程（原理 / 目标 / 答案 / 断言 / 防护）
+  world/        产品世界持久化（每产品一个磁盘目录）
+  ui/           靶场、教学、观测与四个产品的仿真界面
+mcpservers/     MCP stdio server（构件仓库、运维手册）
+data/seeds/     产品种子数据
 ```
 
-## 安全
+几个设计决定：
 
-- API Key 只在 `.env`（使用各厂商原生变量名，如 `ZAI_CODING_CN_API_KEY`）。
-- 端口只发布到回环地址。
-- 容器非 root、根文件系统只读、丢弃全部 capabilities；可写路径是 `data/runtime`。
-- 外发箱和假内网是同一进程里的路由。
+- **外发不出本机**。外发箱和假内网是同一进程里的路由，攻击产生的「外泄」全部落在观测页，不会触达真实网络。
+- **通关判定即代码**。每关的断言对轨迹和外发箱求值（`src/core/flags.ts`），命中记进度，命中防护记 `policy_blocked`。
+- **容器加固**。非 root 运行、根文件系统只读、丢弃全部 capabilities、端口只发布到 `127.0.0.1`。
+- **模型可换**。协议与模型目录由 Pi SDK 处理，进程直连厂商 API，不经过任何中间代理。
+
+## 用于团队培训
+
+课程按 L1→L5 顺序设计，单关 15–40 分钟。组织内训时的一些建议：
+
+- 先只给靶场不给教学页，让学员自己发现攻击路径，再对照答案复盘；
+- L2/L3 同一产品两关，可对比「经典注入」与「SSRF 打元数据」的防御差异；
+- L5 适合结合 OWASP 对 LLM03（Supply Chain）/ 越权类的讨论展开。
+
+## 贡献
+
+欢迎提 Issue 和 PR。新增关卡请参考 `src/scenarios/` 现有结构：一个场景 = 原理 / 目标 / 答案 / 断言 / 防护，产品放在 `src/targets/`。提交前跑 `corepack pnpm check && corepack pnpm build`。
+
+## 安全披露
+
+本仓库自身的研究性漏洞（例如绕过通关判定）欢迎通过 Issue 报告。请不要提交针对真实系统的攻击内容。
+
+## 许可证
+
+[MIT](LICENSE)
