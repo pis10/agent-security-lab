@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requirePageUser } from "@/lib/auth.ts";
 import { catalogData } from "@/lib/page-data.ts";
 import { getScenario } from "@/scenarios/index.ts";
 import { findTarget, toTargetInfo } from "@/targets/registry.ts";
@@ -16,11 +17,12 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function Page({ params }: Props) {
   const { scenarioId } = await params;
+  const user = await requirePageUser(`/learn/${scenarioId}`);
   const scenario = getScenario(scenarioId);
   if (!scenario) notFound();
   const target = findTarget(scenario.target);
   if (!target) notFound();
-  const { progress, meta, scenarios } = catalogData();
+  const { progress, meta, scenarios } = catalogData(user.id);
   return (
     <Lesson
       scenario={scenario}

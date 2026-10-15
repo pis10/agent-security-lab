@@ -90,3 +90,29 @@ export function assertionLabel(assertion: Assertion): string | null {
   }
   return null;
 }
+
+/**登录会话 cookie 名。proxy 只看它在不在，真正的校验在各页面与接口里。 */
+export const SESSION_COOKIE = "asl_session";
+
+/**登录账号（前端可见字段）。 */
+export interface PublicUser {
+  id: number;
+  username: string;
+  display_name: string;
+  is_admin: boolean;
+  must_change_password: boolean;
+}
+
+/**账号管理页的一行：不含密码哈希，附已通关课程数。 */
+export interface AdminUser extends PublicUser {
+  disabled: boolean;
+  created_at: number;
+  last_login_at: number | null;
+  captured: number;
+}
+
+/**新密码最短长度，前后端共用。 */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/**403 时附带的 code：须先修改初始密码。 */
+export const PASSWORD_CHANGE_REQUIRED = "password_change_required";

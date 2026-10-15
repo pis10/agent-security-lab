@@ -8,6 +8,7 @@ import { LlmBadge } from "./components/Badge";
 import { CaptureToast } from "./components/CaptureToast";
 import { Icon } from "./components/Icon";
 import { AppNav } from "./components/Shell";
+import { UserMenu } from "./components/UserMenu";
 import { SIMS } from "./sims";
 import type { ChatMessage, Meta, Observation, Scenario } from "./types";
 import { assertionLabel } from "./types";
@@ -310,19 +311,6 @@ export function Workspace({
           <Icon name="refresh" size={10} />
           重置
         </button>
-        <button
-          type="button"
-          className="chip hover:text-slate-100"
-          title="将全部产品与通关进度恢复为初始状态"
-          onClick={() => {
-            if (!confirm("将全部产品与通关进度恢复为初始状态？")) return;
-            api.resetAll().then(() => {
-              window.location.href = "/";
-            });
-          }}
-        >
-          全部重置
-        </button>
         <Link
           href={observeUrl(targetId)}
           className="chip hover:text-slate-100"
@@ -331,6 +319,7 @@ export function Workspace({
           <Icon name="activity" size={10} />
           观测
         </Link>
+        <UserMenu />
       </header>
 
       <div className="flex-1 min-h-0">

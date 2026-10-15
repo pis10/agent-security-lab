@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertSameOrigin, requireUser } from "@/lib/auth.ts";
 import { handleRoute, parseBody } from "@/lib/http.ts";
 import { getWorldManager } from "@/world/manager.ts";
 
@@ -11,9 +12,11 @@ const ActBody = z.object({
 
 export async function POST(req: Request, ctx: { params: Promise<{ targetId: string }> }) {
   return handleRoute(async () => {
+    assertSameOrigin(req);
+    const user = await requireUser();
     const { targetId } = await ctx.params;
     const body = await parseBody(req, ActBody);
-    const result = await getWorldManager().act(targetId, body.action, body.args);
+    const result = await getWorldManager().act(user.id, targetId, body.action, body.args);
     return Response.json(result);
   });
 }

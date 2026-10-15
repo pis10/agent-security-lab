@@ -13,7 +13,7 @@
     "build": "next build",
     "check": "biome check .",
     "format": "biome format --write .",
-    "test": "node --test --experimental-strip-types src/core/*.test.ts"
+    "test": "node --test --experimental-strip-types src/core/*.test.ts src/world/*.test.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.85.1",

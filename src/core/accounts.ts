@@ -6,6 +6,7 @@ import { createHash, randomBytes, randomInt, scrypt as scryptCb, timingSafeEqual
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
+import { MIN_PASSWORD_LENGTH } from "../lib/contracts.ts";
 import { connect, RUNTIME_DIR } from "./db.ts";
 import { AuthError, NotFoundError } from "./errors.ts";
 
@@ -13,7 +14,8 @@ const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, keylen: number,
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 export const SESSION_TTL_SEC = 7 * 24 * 3600;
-export const MIN_PASSWORD_LENGTH = 8;
+export { MIN_PASSWORD_LENGTH };
+
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 /**初始密码字符集：去掉 0/O/1/l/I 等易混字符。 */
 const PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";

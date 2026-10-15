@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requirePageUser } from "@/lib/auth.ts";
 import { catalogData } from "@/lib/page-data.ts";
 import { findTarget, toTargetInfo } from "@/targets/registry.ts";
 import { productOf } from "@/ui/catalog.ts";
@@ -15,9 +16,10 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function Page({ params }: Props) {
   const { targetId } = await params;
+  const user = await requirePageUser(`/observe/${targetId}`);
   const target = findTarget(targetId);
   if (!target) notFound();
-  const { meta, progress, scenarios } = catalogData();
+  const { meta, progress, scenarios } = catalogData(user.id);
   return (
     <ObserveStudio
       targetId={targetId}

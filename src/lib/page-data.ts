@@ -2,7 +2,7 @@
 
 import { SCENARIOS } from "../scenarios/index.ts";
 import { listTargets, toTargetInfo } from "../targets/registry.ts";
-import { getProgressDb, getWorldManager } from "../world/manager.ts";
+import { getWorldManager } from "../world/manager.ts";
 import { loadConfig } from "./config.ts";
 import type { Meta, ProgressMap, Scenario, TargetInfo, WorldInfo } from "./contracts.ts";
 
@@ -11,7 +11,7 @@ export function llmMeta(): Meta {
   return { llm_model: `${config.llmProvider}/${config.llmModel}` };
 }
 
-export function catalogData(): {
+export function catalogData(userId: number): {
   targets: TargetInfo[];
   scenarios: Scenario[];
   progress: ProgressMap;
@@ -20,13 +20,13 @@ export function catalogData(): {
   return {
     targets: listTargets().map(toTargetInfo),
     scenarios: SCENARIOS,
-    progress: getProgressDb().captured(),
+    progress: getWorldManager().progress.captured(userId),
     meta: llmMeta(),
   };
 }
 
-export function worldSummaries(): WorldInfo[] {
+export function worldSummaries(userId: number): WorldInfo[] {
   return getWorldManager()
-    .list()
+    .list(userId)
     .map(({ messages: _messages, ...rest }) => rest);
 }

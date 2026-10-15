@@ -2,11 +2,12 @@ import { z } from "zod";
 import { BadRequestError } from "@/core/errors.ts";
 import { adminUserView, assertSameOrigin, ensureAccountsReady, requireAdmin } from "@/lib/auth.ts";
 import { handleRoute, parseBody } from "@/lib/http.ts";
+import { getWorldManager } from "@/world/manager.ts";
 
 export const dynamic = "force-dynamic";
 
 const ActionBody = z.object({
-  action: z.enum(["reset_password", "disable", "enable", "grant_admin", "revoke_admin"]),
+  action: z.enum(["reset_password", "reset_progress", "disable", "enable", "grant_admin", "revoke_admin"]),
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ userId: string }> }) {
@@ -20,6 +21,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ userId: string
     if (action === "reset_password") {
       const { user, initialPassword } = await db.resetPassword(userId);
       return Response.json({ user: adminUserView(user), initial_password: initialPassword });
+    }
+    if (action === "reset_progress") {
+      const user = db.getUser(userId);
+      await getWorldManager().resetUser(userId);
+      return Response.json({ user: adminUserView(user) });
     }
     if (action === "disable" && userId === admin.id) throw new BadRequestError("不能停用自己的账号");
     const user =

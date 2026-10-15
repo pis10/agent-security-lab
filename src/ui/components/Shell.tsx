@@ -6,6 +6,7 @@ import { api, onProgressChanged } from "../api";
 import type { Meta, ProgressMap } from "../types";
 import { LlmBadge } from "./Badge";
 import { Icon } from "./Icon";
+import { UserMenu } from "./UserMenu";
 
 export type AppSection = "range" | "learn" | "observe";
 
@@ -48,7 +49,7 @@ export function Shell({
   scenarioCount,
 }: {
   children: ReactNode;
-  active: AppSection;
+  active?: AppSection;
   meta: Meta;
   progress: ProgressMap;
   scenarioCount: number;
@@ -86,21 +87,8 @@ export function Shell({
               <Icon name="flag" size={10} />
               {captured}/{scenarioCount}
             </span>
-            <button
-              type="button"
-              className="chip hover:text-slate-100"
-              title="将全部产品与通关进度恢复为初始状态"
-              onClick={() => {
-                if (!confirm("将全部产品与通关进度恢复为初始状态？")) return;
-                api.resetAll().then(() => {
-                  window.location.href = "/";
-                });
-              }}
-            >
-              <Icon name="refresh" size={10} />
-              全部重置
-            </button>
             <LlmBadge model={meta.llm_model} />
+            <UserMenu />
           </div>
         </div>
       </header>

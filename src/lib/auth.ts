@@ -2,18 +2,11 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AccountsDB, SESSION_TTL_SEC, type User } from "../core/accounts.ts";
-import { ForbiddenError, UnauthorizedError } from "../core/errors.ts";
+import { ForbiddenError, PasswordChangeRequiredError, UnauthorizedError } from "../core/errors.ts";
+import { type PublicUser, SESSION_COOKIE } from "./contracts.ts";
 
-export const SESSION_COOKIE = "asl_session";
-
-/**前端可见的账号字段。 */
-export interface PublicUser {
-  id: number;
-  username: string;
-  display_name: string;
-  is_admin: boolean;
-  must_change_password: boolean;
-}
+export type { PublicUser };
+export { SESSION_COOKIE };
 
 export function publicUser(u: User): PublicUser {
   return {
@@ -54,16 +47,19 @@ export async function sessionToken(): Promise<string | undefined> {
   return (await cookies()).get(SESSION_COOKIE)?.value;
 }
 
+/**先读 cookie 再碰库：构建期预渲染在读 cookie 处就转为动态渲染，不会提前建库、初始化管理员。 */
 export async function currentUser(): Promise<User | null> {
+  const token = await sessionToken();
+  if (!token) return null;
   const db = await ensureAccountsReady();
-  return db.userForSession(await sessionToken());
+  return db.userForSession(token);
 }
 
 /**API 用：未登录 401；还没改初始密码时 403（改密与查询本人接口放行）。 */
 export async function requireUser(opts: { allowMustChange?: boolean } = {}): Promise<User> {
   const user = await currentUser();
   if (!user) throw new UnauthorizedError("请先登录");
-  if (user.must_change_password && !opts.allowMustChange) throw new ForbiddenError("请先修改初始密码");
+  if (user.must_change_password && !opts.allowMustChange) throw new PasswordChangeRequiredError("请先修改初始密码");
   return user;
 }
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { adminUserView, assertSameOrigin, ensureAccountsReady, requireAdmin } from "@/lib/auth.ts";
 import { handleRoute, parseBody } from "@/lib/http.ts";
+import { getWorldManager } from "@/world/manager.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,10 @@ export async function GET() {
   return handleRoute(async () => {
     await requireAdmin();
     const db = await ensureAccountsReady();
-    return Response.json({ users: db.listUsers().map(adminUserView) });
+    const captured = getWorldManager().progress.countsByUser();
+    return Response.json({
+      users: db.listUsers().map((u) => ({ ...adminUserView(u), captured: captured.get(u.id) ?? 0 })),
+    });
   });
 }
 

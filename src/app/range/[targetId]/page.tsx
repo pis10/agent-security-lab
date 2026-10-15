@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { requirePageUser } from "@/lib/auth.ts";
 import { llmMeta } from "@/lib/page-data.ts";
 import { getScenario } from "@/scenarios/index.ts";
 import { findTarget } from "@/targets/registry.ts";
@@ -19,9 +20,10 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function Page({ params, searchParams }: Props) {
   const { targetId } = await params;
-  if (!findTarget(targetId)) notFound();
   const sp = await searchParams;
   const missionId = typeof sp.mission === "string" ? sp.mission : "";
+  await requirePageUser(`/range/${targetId}${missionId ? `?mission=${encodeURIComponent(missionId)}` : ""}`);
+  if (!findTarget(targetId)) notFound();
   const scenario = missionId ? getScenario(missionId) : null;
   return (
     <Workspace
