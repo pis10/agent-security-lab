@@ -24,6 +24,8 @@ import type { ChatMessage, WorldInfo } from "../lib/contracts.ts";
 import { requireScenario, SCENARIOS } from "../scenarios/index.ts";
 import type { Target } from "../targets/base.ts";
 import { findTarget, getTarget } from "../targets/registry.ts";
+import { recordTurnProgress } from "./observations.ts";
+import { TurnQueue } from "./turn-queue.ts";
 
 export interface World {
   /**`u<user_id>:<target_id>`：轨迹、外发箱与 X-ASL-Session 的会话 id。 */
@@ -40,6 +42,8 @@ export interface World {
   messages: ChatMessage[];
   /**正在跑一轮对话。 */
   busy: boolean;
+  runStatus: "idle" | "queued" | "running";
+  lastAccess: number;
 }
 
 interface WorldMeta {
@@ -84,6 +88,7 @@ function diskSnapshot(root: string, targetId: string): WorldInfo | null {
   }
   const saved = readTranscript(root);
   return {
+    run_status: "idle",
     target_id: targetId,
     scenario_id: meta.scenario_id ?? null,
     created: meta.created ?? 0,
@@ -106,11 +111,24 @@ export class WorldManager {
   readonly progress: ProgressDB;
   private _worlds = new Map<string, World>();
   private _locks = new Map<string, Promise<unknown>>();
+  private _resettingUsers = new Set<number>();
+  private _queue: TurnQueue;
+  private _sweep: ReturnType<typeof setInterval>;
+  private _turns = new Map<string, Promise<string>>();
+  private _closing = false;
 
   constructor(config: Config, opts: WorldManagerOptions = {}) {
     this._config = config;
     this._usersDir = opts.usersDir ?? USERS_DIR;
     this.progress = opts.progress ?? getProgressDb();
+    this._queue = new TurnQueue(config.maxConcurrentTurns);
+    this._sweep = setInterval(
+      () => {
+        void this.evictIdle().catch((err) => console.error("world eviction failed", err));
+      },
+      Math.min(config.worldIdleMs, 60_000),
+    );
+    this._sweep.unref();
   }
 
   /**按世界串行化 hydrate / teardown / 防护写入；不同账号、不同产品互不等待。 */
@@ -123,6 +141,19 @@ export class WorldManager {
       if (this._locks.get(key) === tail) this._locks.delete(key);
     });
     return run;
+  }
+
+  /**账号重置期间禁止新操作；检查也放在锁内，覆盖已排队的请求。 */
+  private _worldLock<T>(userId: number, targetId: string, fn: () => Promise<T>): Promise<T> {
+    const check = () => {
+      if (this._closing) throw new ConflictError("服务正在停止，请稍后重试");
+      if (this._resettingUsers.has(userId)) throw new ConflictError("账号正在重置，请稍后再试");
+    };
+    check();
+    return this._lock(worldKey(userId, targetId), async () => {
+      check();
+      return fn();
+    });
   }
 
   private _worldsDir(userId: number): string {
@@ -167,37 +198,53 @@ export class WorldManager {
     if (scenarioId !== null) {
       requireScenario(scenarioId, targetId);
     }
+    return this._worldLock(userId, targetId, () => this._ensureLocked(userId, targetId, root, scenarioId));
+  }
+
+  /**调用方持有世界锁；获取世界与后续操作必须在同一临界区，避免操作已销毁的实例。 */
+  private async _ensureLocked(
+    userId: number,
+    targetId: string,
+    root: string,
+    scenarioId: string | null = null,
+  ): Promise<World> {
     await requireLlm();
     const key = worldKey(userId, targetId);
-    return this._lock(key, async () => {
-      let world = this._worlds.get(key) ?? null;
-      if (world === null) {
-        world = await this._hydrate(userId, targetId, root, scenarioId);
-        this._worlds.set(key, world);
-      } else if (scenarioId !== null && scenarioId !== world.scenarioId) {
-        // 换课：重建世界，防护开关保留
-        this._assertIdle(world, "切换课程");
-        const defenses = [...defensesOf(world.ctx)].sort();
-        await this._teardown(key, root);
-        world = await this._hydrate(userId, targetId, root, scenarioId);
-        if (defenses.length > 0) {
-          world.ctx.state.defenses = new Set(defenses);
-          this._saveMeta(world);
-        }
-        this._worlds.set(key, world);
+    let world = this._worlds.get(key) ?? null;
+    if (world === null) {
+      const storedScenario = this._scenarioOf(key, root);
+      const switching = scenarioId !== null && existsSync(root) && scenarioId !== storedScenario;
+      const defenses = switching ? this._defensesOf(key, root) : null;
+      if (switching) await this._teardown(key, root);
+      world = await this._hydrate(userId, targetId, root, scenarioId);
+      if (defenses) {
+        world.ctx.state.defenses = defenses;
+        this._saveMeta(world);
       }
-      return world;
-    });
+      this._worlds.set(key, world);
+    } else if (scenarioId !== null && scenarioId !== world.scenarioId) {
+      this._assertIdle(world, "切换课程");
+      const defenses = new Set(defensesOf(world.ctx));
+      await this._teardown(key, root);
+      world = await this._hydrate(userId, targetId, root, scenarioId);
+      world.ctx.state.defenses = defenses;
+      this._saveMeta(world);
+      this._worlds.set(key, world);
+    }
+    world.lastAccess = Date.now();
+    return world;
   }
 
   async setDefenses(userId: number, targetId: string, defenses: string[]): Promise<World> {
-    const world = await this.ensure(userId, targetId);
-    const valid = new Set(world.target.defenses.map((d) => d.id));
+    const root = this._root(userId, targetId);
+    const valid = new Set(getTarget(targetId).defenses.map((d) => d.id));
     const unknown = defenses.filter((d) => !valid.has(d));
     if (unknown.length > 0) {
       throw new BadRequestError(`unknown defenses: ${JSON.stringify([...unknown].sort())}`);
     }
-    return this._lock(world.key, async () => {
+    return this._worldLock(userId, targetId, async () => {
+      const world = await this._ensureLocked(userId, targetId, root);
+      this._assertIdle(world, "修改防护");
       world.ctx.state.defenses = new Set(defenses);
       this._saveMeta(world);
       return world;
@@ -206,15 +253,7 @@ export class WorldManager {
 
   private async _teardown(key: string, root: string): Promise<void> {
     const world = this._worlds.get(key);
-    if (world) {
-      this._worlds.delete(key);
-      try {
-        await world.target.onSessionEnd?.(world.ctx);
-      } catch (err) {
-        console.error(`world ${key} onSessionEnd failed`, err);
-      }
-      world.tracer.close();
-    }
+    if (world) await this._dispose(world);
     SINKS.purgeSession(key);
     SINKS.detachLog(key);
     if (existsSync(root)) rmSync(root, { recursive: true, force: true });
@@ -255,71 +294,115 @@ export class WorldManager {
     // 清世界与当前课程的通关记录（未绑定课程时清该产品全部）；防护开关与课程绑定保留
     const root = this._root(userId, targetId);
     const key = worldKey(userId, targetId);
-    const keep = await this._lock(key, async () => {
+    if (scenarioId !== null) requireScenario(scenarioId, targetId);
+    return this._worldLock(userId, targetId, async () => {
       this._assertIdle(this._worlds.get(key), "重置");
-      const defenses = new Set(this._defensesOf(key, root));
+      await requireLlm();
+      const defenses = this._defensesOf(key, root);
       const boundScenario = scenarioId ?? this._scenarioOf(key, root);
       await this._teardown(key, root);
-      return { defenses, boundScenario };
+      const progressIds = boundScenario
+        ? [boundScenario]
+        : SCENARIOS.filter((s) => s.target === targetId).map((s) => s.id);
+      this.progress.clearIds(userId, progressIds);
+      const world = await this._ensureLocked(userId, targetId, root, boundScenario);
+      world.ctx.state.defenses = defenses;
+      this._saveMeta(world);
+      return world;
     });
-    const progressIds = keep.boundScenario
-      ? [keep.boundScenario]
-      : SCENARIOS.filter((s) => s.target === targetId).map((s) => s.id);
-    this.progress.clearIds(userId, progressIds);
-    const world = await this.ensure(userId, targetId, keep.boundScenario);
-    if (keep.defenses.size > 0) {
-      await this._lock(key, async () => {
-        world.ctx.state.defenses = keep.defenses;
-        this._saveMeta(world);
-      });
-    }
-    return world;
   }
 
-  /**清掉该账号的全部产品世界与通关进度，回到刚打开靶场。其他账号不受影响。 */
+  /**重置期间封住该账号的新操作，等待已有短操作结束，再统一检查对话是否仍在运行。 */
   async resetUser(userId: number): Promise<void> {
     const dir = this._worldsDir(userId);
-    const live = [...this._worlds.values()].filter((w) => w.userId === userId);
-    for (const w of live) this._assertIdle(w, "重置");
-    const targetIds = new Set([...live.map((w) => w.targetId), ...this.list(userId).map((w) => w.target_id)]);
-    for (const targetId of targetIds) {
-      const key = worldKey(userId, targetId);
-      await this._lock(key, () => this._teardown(key, path.join(dir, targetId)));
+    if (this._resettingUsers.has(userId)) throw new ConflictError("账号正在重置，请稍后再试");
+    this._resettingUsers.add(userId);
+    try {
+      await Promise.all([...this._locks].filter(([key]) => key.startsWith(`u${userId}:`)).map(([, tail]) => tail));
+      const live = [...this._worlds.values()].filter((w) => w.userId === userId);
+      for (const w of live) this._assertIdle(w, "重置");
+      const targetIds = new Set([...live.map((w) => w.targetId), ...this.list(userId).map((w) => w.target_id)]);
+      for (const targetId of targetIds) {
+        await this._teardown(worldKey(userId, targetId), path.join(dir, targetId));
+      }
+      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+      this.progress.clearUser(userId);
+    } finally {
+      this._resettingUsers.delete(userId);
     }
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-    this.progress.clearUser(userId);
   }
 
   async chat(userId: number, targetId: string, message: string): Promise<string> {
-    const world = await this.ensure(userId, targetId);
-    // ensure 之后到这里没有 await：同一世界的并发请求只有一条能进
-    if (world.busy) throw new ConflictError("上一条消息还在处理，请等助手回复后再发送");
-    world.busy = true;
-    let reply: string;
+    const root = this._root(userId, targetId);
+    const { world, turn } = await this._worldLock(userId, targetId, async () => {
+      const world = await this._ensureLocked(userId, targetId, root);
+      this._assertIdle(world, "发送消息");
+      world.busy = true;
+      world.runStatus = "queued";
+      const turn = this._chatWorld(world, message);
+      this._turns.set(world.key, turn);
+      return { world, turn };
+    });
     try {
+      return await turn;
+    } finally {
+      this._turns.delete(world.key);
+    }
+  }
+
+  private async _chatWorld(world: World, message: string): Promise<string> {
+    let capturedBefore = new Set<string>();
+    const eventStart = world.tracer.events.length;
+    let failed = false;
+    let reply: string;
+    let release: (() => void) | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    try {
+      capturedBefore = new Set(Object.keys(this.progress.captured(world.userId)));
+      release = await this._queue.acquire();
+      world.runStatus = "running";
+      timer = setTimeout(() => {
+        timedOut = true;
+        world.agent.abort();
+      }, this._config.turnTimeoutMs);
       await world.agent.prompt(message);
+      if (timedOut) throw new Error("turn timeout");
+      if (world.agent.state.errorMessage) throw new Error(world.agent.state.errorMessage);
       if (endedOnToolResults(world.agent.state.messages)) {
         appendAssistantNote(world.agent, BUDGET_NOTE);
         world.tracer.record("note", { text: BUDGET_NOTE });
       }
       reply = lastAssistantText(world.agent.state.messages);
     } catch (err) {
+      failed = true;
       console.error(`world ${world.key} chat turn interrupted`, err);
-      reply = "[error] 这一轮助手没有跑完（目标侧中断）。可以重发一次，或到观测页查看这轮已发生的调用。";
+      reply = timedOut
+        ? "[error] 本轮对话已超时并停止。已发生的工具调用保留在观测页，可缩短任务后重试。"
+        : "[error] 这一轮助手没有跑完（目标侧中断）。可以重发一次，或到观测页查看这轮已发生的调用。";
       appendAssistantNote(world.agent, reply);
     } finally {
-      world.busy = false;
+      try {
+        this._syncChat(world);
+        recordTurnProgress(world, this.progress, eventStart, failed, capturedBefore);
+      } finally {
+        if (timer) clearTimeout(timer);
+        release?.();
+        world.busy = false;
+        world.runStatus = "idle";
+        world.lastAccess = Date.now();
+      }
     }
-    this._syncChat(world);
     return reply;
   }
 
-  /**丢弃当前对话并整体重建 agent（不带历史）。工单、轨迹、外发与防护保留。 */
+  /**用 SDK 清空对话与队列，保留工具与提示词基线。工单、轨迹、外发与防护保留。 */
   async clearChat(userId: number, targetId: string): Promise<World> {
-    const world = await this.ensure(userId, targetId);
-    this._assertIdle(world, "清空对话");
-    return this._lock(world.key, async () => {
-      world.agent = await this._makeAgent(world.target, world.ctx, world.tracer);
+    const root = this._root(userId, targetId);
+    return this._worldLock(userId, targetId, async () => {
+      const world = await this._ensureLocked(userId, targetId, root);
+      this._assertIdle(world, "清空对话");
+      world.agent.reset();
       world.messages = [];
       this._syncChat(world);
       return world;
@@ -332,8 +415,12 @@ export class WorldManager {
     action: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const world = await this.ensure(userId, targetId);
-    return this._lock(world.key, () => this._runAct(world, action, args));
+    const root = this._root(userId, targetId);
+    return this._worldLock(userId, targetId, async () => {
+      const world = await this._ensureLocked(userId, targetId, root);
+      this._assertIdle(world, "修改场景");
+      return this._runAct(world, action, args);
+    });
   }
 
   private async _runAct(world: World, action: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -348,17 +435,42 @@ export class WorldManager {
     return this._snapshot(world);
   }
 
-  async shutdown(): Promise<void> {
-    const worlds = [...this._worlds.values()];
-    this._worlds.clear();
-    for (const world of worlds) {
-      try {
-        await world.target.onSessionEnd?.(world.ctx);
-        world.tracer.close();
-      } catch (err) {
-        console.warn(`world ${world.key} shutdown failed`, err);
-      }
+  /**页面仍在访问时保留世界；无人访问后落盘并关闭 MCP，下次访问重新恢复。 */
+  async evictIdle(now = Date.now()): Promise<void> {
+    if (this._closing) return;
+    for (const [key, world] of this._worlds) {
+      if (world.busy || now - world.lastAccess < this._config.worldIdleMs) continue;
+      await this._lock(key, async () => {
+        if (this._closing || this._resettingUsers.has(world.userId)) return;
+        if (this._worlds.get(key) !== world || world.busy || now - world.lastAccess < this._config.worldIdleMs) return;
+        this._syncChat(world);
+        this._saveMeta(world);
+        await this._dispose(world);
+      });
     }
+  }
+
+  private async _dispose(world: World): Promise<void> {
+    this._worlds.delete(world.key);
+    try {
+      await world.target.onSessionEnd?.(world.ctx);
+    } catch (err) {
+      console.warn(`world ${world.key} close failed`, err);
+    } finally {
+      world.tracer.close();
+      SINKS.detachLog(world.key);
+      SINKS.purgeSession(world.key);
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    this._closing = true;
+    clearInterval(this._sweep);
+    this._queue.close();
+    await Promise.allSettled([...this._locks.values()]);
+    for (const world of this._worlds.values()) world.agent.abort();
+    await Promise.allSettled([...this._turns.values()]);
+    for (const world of this._worlds.values()) await this._dispose(world);
   }
 
   private async _hydrate(userId: number, targetId: string, root: string, scenarioId: string | null): Promise<World> {
@@ -384,26 +496,40 @@ export class WorldManager {
     const ctx = new ToolContext(key, tracer, this._config);
     ctx.state.world_dir = root;
     ctx.state.defenses = new Set(meta.defenses);
-    await target.seed?.(ctx);
-    SINKS.attachLog(key, path.join(root, "sinks.jsonl"));
-    await target.onSessionStart?.(ctx);
-    const saved = readTranscript(root);
-    const world: World = {
-      key,
-      userId,
-      targetId,
-      target,
-      ctx,
-      agent: await this._makeAgent(target, ctx, tracer, saved ?? undefined),
-      tracer,
-      scenarioId: meta.scenario_id ?? null,
-      created: meta.created ?? Date.now() / 1000,
-      messages: [],
-      busy: false,
-    };
-    this._saveMeta(world);
-    this._syncChat(world);
-    return world;
+    try {
+      await target.seed?.(ctx);
+      SINKS.attachLog(key, path.join(root, "sinks.jsonl"));
+      await target.onSessionStart?.(ctx);
+      const saved = readTranscript(root);
+      const world: World = {
+        key,
+        userId,
+        targetId,
+        target,
+        ctx,
+        agent: await this._makeAgent(target, ctx, tracer, saved ?? undefined),
+        tracer,
+        scenarioId: meta.scenario_id ?? null,
+        created: meta.created ?? Date.now() / 1000,
+        messages: [],
+        busy: false,
+        runStatus: "idle",
+        lastAccess: Date.now(),
+      };
+      this._saveMeta(world);
+      this._syncChat(world);
+      return world;
+    } catch (error) {
+      // 初始化尚未进入 _worlds，常规 teardown 找不到它；在这里收尾已启动的 MCP 与文件句柄。
+      try {
+        await target.onSessionEnd?.(ctx);
+      } finally {
+        tracer.close();
+        SINKS.purgeSession(key);
+        SINKS.detachLog(key);
+      }
+      throw error;
+    }
   }
 
   private async _makeAgent(
@@ -442,6 +568,7 @@ export class WorldManager {
 
   private _snapshot(world: World): WorldInfo {
     return {
+      run_status: world.runStatus,
       target_id: world.targetId,
       scenario_id: world.scenarioId,
       created: world.created,

@@ -89,6 +89,11 @@ export function UserMenu() {
               账号管理
             </MenuLink>
           )}
+          {user.is_admin && (
+            <MenuLink href="/admin/progress" icon="activity">
+              教学进度
+            </MenuLink>
+          )}
           <button type="button" className={ITEM} onClick={resetMine}>
             <Icon name="refresh" size={12} className="text-dim" />
             重置我的进度

@@ -7,7 +7,7 @@ export interface SimProps {
   simState: Record<string, unknown>;
   messages: ChatMessage[];
   onSend: (message: string) => void;
-  onAct?: (action: string, args: Record<string, unknown>) => Promise<Record<string, unknown> | void>;
+  onAct?: (action: string, args: Record<string, unknown>) => Promise<Record<string, unknown> | undefined>;
   onResetChat?: () => void;
   busy: boolean;
 }

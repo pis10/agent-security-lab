@@ -40,3 +40,16 @@ test("ASL_LLM_COMPAT 解析为对象，非法时报错", () => {
 test("设置 ASL_LLM_BASE_URL 却缺 ASL_LLM_MODEL 时报错", () => {
   assert.throws(() => loadConfig({ ASL_LLM_BASE_URL: "http://x" }), /ASL_LLM_MODEL/);
 });
+
+test("模型容量与回收参数有合理默认值，拒绝零、负数、NaN 与超出定时器范围的值", () => {
+  const config = loadConfig({});
+  assert.equal(config.maxConcurrentTurns, 4);
+  assert.equal(config.turnTimeoutMs, 120_000);
+  assert.equal(config.worldIdleMs, 900_000);
+  for (const name of ["ASL_MAX_CONCURRENT_TURNS", "ASL_TURN_TIMEOUT_MS", "ASL_WORLD_IDLE_MS"]) {
+    for (const value of ["0", "-1", "NaN", "1.5", "2147483648"]) {
+      resetConfigCache();
+      assert.throws(() => loadConfig({ [name]: value }), /须为正整数/);
+    }
+  }
+});

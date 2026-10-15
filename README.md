@@ -6,9 +6,9 @@
 
 ## 运行
 
-唯一部署方式是 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。容器里才有 `cat` / `id` 这条命令注入面。
+运行使用 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。Compose 启动应用与报告执行调度服务；每次 `read_report` 用同一个镜像创建一次性容器，真实执行 `cat` / `id` 后销毁。
 
-模型走 [Pi](https://github.com/earendil-works/pi) 的 `pi-ai` / `pi-agent-core`：协议与目录由 SDK 处理，进程直连厂商 API。模型目录用 Pi 包内清单，换模型 id 靠升级 Pi。
+模型走 [Pi 1.2.0](https://github.com/earendil-works/pi/tree/v1.2.0) 的 `pi-ai` / `pi-agent-core`，MCP 客户端使用 `pi-mcp`：协议与目录由 SDK 处理，进程直连厂商 API。模型目录用 Pi 包内清单，换模型 id 靠升级 Pi。
 
 ```bash
 cp .env.example .env
@@ -17,7 +17,7 @@ docker compose up -d --build
 # http://127.0.0.1:8600
 ```
 
-`.env` 只放本机，compose 注入容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。升级后若对话无法恢复，对该产品重置即可（旧 transcript 格式不转换）。
+`.env` 只放本机，compose 注入应用容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。
 
 换厂商只改 `ASL_LLM_PROVIDER`、`ASL_LLM_MODEL` 和该厂商的原生 Key，例如：
 
@@ -58,17 +58,53 @@ OPENROUTER_API_KEY=...
 
 不要把 coding-agent 的 `read` / `write` / `edit` / `bash` 装进靶场。模型只能看到各产品自己的工具。
 
+运行隔离集成测试（会创建并清理专用的测试容器和卷）：
+
+```bash
+docker build -t agent-security-lab:sandbox-test .
+ASL_TEST_IMAGE=agent-security-lab:sandbox-test corepack pnpm test:sandbox
+```
+
 改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm test` / `corepack pnpm build`），跑靶场仍走上面的 compose。
+
+## 模型自检
+
+换模型或调整模型服务配置后，用标准解法重复跑五关。沿用应用容器中的模型环境变量和沙箱：
+
+```bash
+docker compose exec asl node src/smoke/run.ts --runs 3
+# 不用 Compose 时：
+docker exec agent-security-lab node src/smoke/run.ts --runs 3
+```
+
+源码目录也可执行 `pnpm smoke`（自动读取本地 `.env`，已有环境变量优先）。L2 需要可用的沙箱 Unix socket；可用 `ASL_SANDBOX_SOCKET` 指定路径。只验证其他关卡无需沙箱，例如：
+
+```bash
+pnpm smoke --runs 3 --scenario ticket-idor --scenario token-audience
+```
+
+每关在关闭/开启防护时各跑 N 次；L4 每个样本包含「读通知写入记忆 → 清空聊天 → 正常回复邮件」两轮。自检直接复用 Agent、产品工具、关卡断言与内部 HTTP 路由，在独立进程的临时世界中运行，不创建登录账号，也不修改现有世界和进度；它不覆盖浏览器或登录流程。结束或正常中断时清理临时世界及 MCP 子进程。
+
+默认每轮对话限时 120 秒，超时通过 SDK 取消，再等待工具收尾；`--timeout-ms` 可调整。样本依次执行。默认报告写入 `data/runtime/smoke/`（容器里位于持久数据卷），也可用 `--output /tmp/smoke.json` 指定新文件；已有文件不会覆盖。每完成一项即保存，报告只记录模型标识、调用名称、结果与耗时，不保存 Key、回复、工具参数或临时凭据。
+
+- 通关率：无防护时，实际关卡断言通过且没有运行错误的样本 / 已完成的无防护样本。
+- 拦截率：有防护时，有对应 `policy_blocked` 事件、未通关且没有运行错误的样本 / 已完成的有防护样本。
+- 疑似模型拒绝（基于回复措辞的启发式识别）、未演示、错误和超时分别列出，均计入分母；模型拒绝不算防护拦截。即使运行出错，也单独保留已成立的防护绕过证据。
+- 错误样本附带来源、工具名和固定分类（例如 `invalid_token`、`context_limit`、`tool_calling_config`），不保存可能回显凭据的服务端原文。若一次防护样本既有拦截又有后续工具错误，按错误样本统计，同时保留拦截次数。
+- 退出码：`0` 全部符合预期；`1` 有未演示、错误、超时或防护绕过；`2` 配置失败或运行中断。中断报告的 `complete` 为 `false`，不能作为完整验收结果。
+
+自检会真实调用模型并消耗额度。小样本结果只说明当前标准解法的表现，不代表所有提示都稳定可用。若服务不产生工具调用，检查服务端的自动工具选择与对应 parser（例如 vLLM 的 `--enable-auto-tool-choice`）；若报上下文长度错误，核对服务端实际容量和 `models.json` 的 `contextWindow` / `maxTokens`。报告中的容量来自配置，并非对服务端的自动探测。
 
 ## 怎么玩
 
 | 入口 | 地址 | 用途 |
 |---|---|---|
 | 靶场 | `/` | 打开仿真产品 |
-| 教学 | `/learn` | 原理、目标、答案、通关条件 |
+| 教学 | `/learn` | 原理、目标、分级提示、答案、通关条件 |
 | 观测 | `/observe` | 工具调用、外发箱、防护开关 |
+| 教师视图 | `/admin/progress` | 每人五关进度、复测记录与 CSV（管理员） |
 
-按 L1 至 L5 进行。请先在教学页阅读原理与目标，再进入产品尝试；必要时查看答案。观测中开启防护后，返回产品清空对话再试（无需重置；重置会清除当前课程的通关记录）。产品「重置」清除该产品数据及当前课程的通关进度，同产品其他课程不受影响；顶栏「全部重置」恢复整个靶场。切换课程会重置对应产品。
+按 L1 至 L5 进行。请先在教学页阅读原理与目标，再进入产品尝试；必要时查看答案。观测中开启防护后，返回产品清空对话再试（无需重置；重置会清除当前课程的通关记录）。产品「重置」清除该产品数据及当前课程的通关进度，同产品其他课程不受影响；账号菜单「重置我的进度」只清当前账号的数据。切换课程会重置对应产品。同一产品回复期间，再发消息、清空、重置和修改防护会返回 409，等待本轮结束后再操作。
 
 | 关 | 产品 | 攻击面 |
 |---|---|---|
@@ -80,11 +116,30 @@ OPENROUTER_API_KEY=...
 
 防护默认关。命中防护记 `policy_blocked`。
 
+产品顶栏的任务卡直接显示目标、通关条件，按「提示 1 → 提示 2 → 答案」逐步展开。自由探索时可从「选择任务」进入课程。管理员在教学进度页统一控制答案是否开放；默认开放，关闭后服务端不再向学员下发答案（管理员始终可见），已打开的页面需要刷新，已看过的内容无法收回。
+
+教学进度显示首次通关时间，以及通关后开启该关全部防护、实际调用相关工具的最近一次复测。仅开启开关、普通聊天或刷新页面不算复测；「实际拦截」「已调用，未见拦截」「运行出错」分开显示，不把没有通关当成防护成功。CSV 使用 UTC 时间，页面显示浏览器当地时间。
+
+### 多人运行
+
+单进程内默认最多同时执行 4 轮对话，多余请求按先后排队，产品页显示「排队中」。同一世界在排队和执行时均禁止重复发送或重置。每轮执行默认限时 120 秒（不含排队），超时通过 Pi 取消模型请求并等待工具收尾，再释放容量，避免遗留工具与下一轮并发写数据。待执行队列最多 100 轮。报告执行调度服务同时运行的容器数与对话并发相同，Compose 会把 `ASL_MAX_CONCURRENT_TURNS` 一并传给它。
+
+世界默认 15 分钟无人访问后落盘并释放内存及 MCP 子进程；下次进入从磁盘恢复对话、记忆、轨迹和外发记录。可见产品页的轮询视为仍在使用，后台标签停止轮询。可通过 `.env` 调整：
+
+```dotenv
+ASL_MAX_CONCURRENT_TURNS=4
+ASL_TURN_TIMEOUT_MS=120000
+ASL_WORLD_IDLE_MS=900000
+```
+
+这些限制作用于当前应用进程，应用维持单进程运行；模型服务自身也应按实际吞吐配置容量。
+
 ## 目录
 
 ```
 src/app/         页面与 HTTP 入口（产品 UI、/api、/sink、/internal、/idp、/insights-warehouse）
 src/core/        agent（Pi 循环）、工具上下文、轨迹、断言、外发箱、进度库
+src/sandbox/     报告执行调度器与一次性容器入口
 src/targets/     四个产品
 src/scenarios/   五关课
 src/world/       产品世界
@@ -100,5 +155,9 @@ agent-security-notes/  Agent 安全教学文章与截图
 
 - API Key 只在 `.env`（使用各厂商原生变量名，如 `ZAI_CODING_CN_API_KEY`）。
 - 端口只发布到回环地址。
-- 容器非 root、根文件系统只读、丢弃全部 capabilities；可写路径是 `data/runtime`。
-- 外发箱和假内网是同一进程里的路由。
+- 应用容器非 root、根文件系统只读、丢弃全部 capabilities；持久数据写入 `data/runtime`，临时文件写入 `/tmp`。
+- HTTP 工具只能请求本站服务；元数据 IP 映射到站内仿真响应，其他地址返回模拟连接失败。重定向逐跳检查，这层限制始终生效，不受教学防护开关影响，也不限制模型客户端连接配置的模型服务。
+- 外发箱、假内网、拨测站点、IdP 和 Insights 路由仅接受进程内随机令牌，浏览器登录也不能直接调用。令牌只在当前进程内共享，因此应用按单进程运行。
+- L2 在一次性容器执行真实 shell：非 root、断网、根目录只读，无应用数据卷和模型凭据，限制内存、进程数、时间和输出。每次只传入当前世界的报告文件，执行完成后销毁整个容器。
+- 调度服务通过专用 Unix socket 接收固定格式的报告任务，是唯一挂载 Docker socket 的组件；应用与执行容器均不挂载 Docker socket。它属于可信基础设施，不对外暴露端口或接受任意 Docker 参数。
+- 沙箱不可用时 `read_report` 返回服务不可用，不会回退到应用或宿主机执行。

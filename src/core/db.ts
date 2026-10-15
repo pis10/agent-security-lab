@@ -56,19 +56,28 @@ export class ProgressDB {
             defenses    TEXT NOT NULL DEFAULT '[]',
             captured_at REAL NOT NULL,
             PRIMARY KEY (user_id, scenario_id)
-        )
+        );
+        CREATE TABLE IF NOT EXISTS retests (
+          user_id INTEGER NOT NULL,
+          scenario_id TEXT NOT NULL,
+          tested_at REAL NOT NULL,
+          outcome TEXT NOT NULL,
+          defenses TEXT NOT NULL,
+          PRIMARY KEY (user_id, scenario_id)
+        );
+        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       `),
     );
   }
 
-  /**记录通关。已通关时只更新会话与防护，保留首次通关时间。 */
+  /**记录通关。已通关时保留首次证据，避免轮询把后来开启的防护记到历史通关上。 */
   recordCapture(userId: number, scenarioId: string, sessionId: string, defenses: string[]): void {
     this._ensureSchema();
     this._with((db) =>
       db
         .prepare(
           `INSERT INTO captures (user_id, scenario_id, session_id, defenses, captured_at) VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT (user_id, scenario_id) DO UPDATE SET session_id = excluded.session_id, defenses = excluded.defenses`,
+           ON CONFLICT (user_id, scenario_id) DO NOTHING`,
         )
         .run(userId, scenarioId, sessionId, JSON.stringify(defenses), Date.now() / 1000),
     );
@@ -109,17 +118,69 @@ export class ProgressDB {
     return new Map(rows.map((r) => [Number(r.user_id), Number(r.n)]));
   }
 
+  /**个人学习默认可看答案；管理员可统一关闭，服务端不再下发答案。 */
+  answersVisible(): boolean {
+    return this._with((db) => {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'answers_visible'").get();
+      return row?.value !== "false";
+    });
+  }
+
+  setAnswersVisible(visible: boolean): void {
+    this._with((db) =>
+      db
+        .prepare(
+          "INSERT INTO settings (key, value) VALUES ('answers_visible', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .run(String(visible)),
+    );
+  }
+
+  recordRetest(
+    userId: number,
+    scenarioId: string,
+    outcome: "blocked" | "exercised" | "error",
+    defenses: string[],
+  ): void {
+    this._with((db) =>
+      db
+        .prepare(
+          `INSERT INTO retests (user_id, scenario_id, tested_at, outcome, defenses) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, scenario_id) DO UPDATE SET tested_at = excluded.tested_at, outcome = excluded.outcome, defenses = excluded.defenses`,
+        )
+        .run(userId, scenarioId, Date.now() / 1000, outcome, JSON.stringify(defenses)),
+    );
+  }
+
+  retests(userId: number): Record<string, { tested_at: number; outcome: "blocked" | "exercised" | "error" }> {
+    return this._with((db) =>
+      Object.fromEntries(
+        db
+          .prepare("SELECT scenario_id, tested_at, outcome FROM retests WHERE user_id = ?")
+          .all(userId)
+          .map((r) => [r.scenario_id, { tested_at: Number(r.tested_at), outcome: r.outcome }]),
+      ),
+    );
+  }
+
   clearIds(userId: number, scenarioIds: string[]): void {
     if (scenarioIds.length === 0) return;
     this._ensureSchema();
     this._with((db) => {
       const stmt = db.prepare("DELETE FROM captures WHERE user_id = ? AND scenario_id = ?");
-      for (const sid of scenarioIds) stmt.run(userId, sid);
+      const retest = db.prepare("DELETE FROM retests WHERE user_id = ? AND scenario_id = ?");
+      for (const sid of scenarioIds) {
+        stmt.run(userId, sid);
+        retest.run(userId, sid);
+      }
     });
   }
 
   clearUser(userId: number): void {
     this._ensureSchema();
-    this._with((db) => db.prepare("DELETE FROM captures WHERE user_id = ?").run(userId));
+    this._with((db) => {
+      db.prepare("DELETE FROM captures WHERE user_id = ?").run(userId);
+      db.prepare("DELETE FROM retests WHERE user_id = ?").run(userId);
+    });
   }
 }

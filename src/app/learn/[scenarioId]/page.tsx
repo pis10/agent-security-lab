@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requirePageUser } from "@/lib/auth.ts";
-import { catalogData } from "@/lib/page-data.ts";
+import { catalogData, learnerScenario } from "@/lib/page-data.ts";
 import { getScenario } from "@/scenarios/index.ts";
 import { findTarget, toTargetInfo } from "@/targets/registry.ts";
 import { Lesson } from "@/ui/Lesson";
@@ -22,10 +22,10 @@ export default async function Page({ params }: Props) {
   if (!scenario) notFound();
   const target = findTarget(scenario.target);
   if (!target) notFound();
-  const { progress, meta, scenarios } = catalogData(user.id);
+  const { progress, meta, scenarios } = catalogData(user);
   return (
     <Lesson
-      scenario={scenario}
+      scenario={learnerScenario(scenario, user)}
       target={toTargetInfo(target)}
       progress={progress}
       meta={meta}

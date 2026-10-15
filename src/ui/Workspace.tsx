@@ -8,6 +8,7 @@ import { LlmBadge } from "./components/Badge";
 import { CaptureToast } from "./components/CaptureToast";
 import { Icon } from "./components/Icon";
 import { AppNav } from "./components/Shell";
+import { TaskHints } from "./components/TaskHints";
 import { UserMenu } from "./components/UserMenu";
 import { SIMS } from "./sims";
 import type { ChatMessage, Meta, Observation, Scenario } from "./types";
@@ -18,11 +19,13 @@ export function Workspace({
   missionId,
   scenario,
   meta,
+  missions,
 }: {
   targetId: string;
   missionId: string;
   scenario: Scenario | null;
   meta: Meta;
+  missions: Scenario[];
 }) {
   const nav = useRouter();
 
@@ -30,6 +33,7 @@ export function Workspace({
   const [appliedDefenses, setAppliedDefenses] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
+  const [runStatus, setRunStatus] = useState<"idle" | "queued" | "running">("idle");
   const [simState, setSimState] = useState<Record<string, unknown>>({});
   const [observations, setObservations] = useState<Observation[]>([]);
   const [missionOpen, setMissionOpen] = useState(false);
@@ -60,6 +64,7 @@ export function Workspace({
         if (cancelled) return;
         setAppliedDefenses(new Set(w.enabled_defenses));
         setMessages(w.messages ?? []);
+        setRunStatus(w.run_status);
         setReady(true);
       })
       .catch((e) => {
@@ -82,7 +87,10 @@ export function Workspace({
         .listWorlds()
         .then((list) => {
           const w = list.find((x) => x.target_id === targetId);
-          if (w) setAppliedDefenses(new Set(w.enabled_defenses));
+          if (w) {
+            setAppliedDefenses(new Set(w.enabled_defenses));
+            setRunStatus(w.run_status);
+          }
         })
         .catch(() => {});
       api
@@ -136,7 +144,7 @@ export function Workspace({
 
   const send = useCallback(
     (message: string) => {
-      if (!ready || busy) return;
+      if (!ready || busy || runStatus !== "idle") return;
       setMessages((m) => [...m, { role: "user", content: message }]);
       setBusy(true);
       busyRef.current = true;
@@ -148,9 +156,10 @@ export function Workspace({
         .finally(() => {
           busyRef.current = false;
           setBusy(false);
+          setRunStatus("idle");
         });
     },
-    [ready, busy, targetId],
+    [ready, busy, runStatus, targetId],
   );
 
   const act = useCallback(
@@ -240,7 +249,7 @@ export function Workspace({
               className={`chip ${missionObs?.passed ? "text-ok border-ok/50" : "text-warn border-warn/40"}`}
             >
               <Icon name="target" size={10} />
-              <span>任务进度</span>
+              <span>任务卡 · {scenario.tier}</span>
               {missionObs?.passed ? (
                 <span>已通关</span>
               ) : missionObs && missionObs.total > 0 ? (
@@ -250,8 +259,10 @@ export function Workspace({
               ) : null}
             </button>
             {missionOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 panel p-3 shadow-pop z-40">
-                <div className="text-[12px] text-slate-300 leading-relaxed">当前关卡见顶栏，原理与答案见教学页。</div>
+              <div className="absolute right-0 top-full mt-1.5 w-[min(26rem,90vw)] max-h-[75vh] overflow-y-auto panel p-4 shadow-pop z-40">
+                <h2 className="text-sm font-semibold text-slate-100">{scenario.title}</h2>
+                <p className="mt-2 text-[13px] text-slate-300 leading-relaxed">{scenario.goal}</p>
+                <div className="mt-3 text-xs text-dim">通关条件</div>
                 {missionChecks.length > 0 && (
                   <ul className="mt-2 space-y-1">
                     {missionChecks.map((c, i) => (
@@ -271,6 +282,9 @@ export function Workspace({
                     {missionObs.passed ? "观测页已记录相关结果" : "外发与工具结果将记录于观测页"}
                   </div>
                 )}
+                <div className="mt-4 border-t border-edge pt-3 text-slate-300">
+                  <TaskHints key={scenario.id} scenario={scenario} />
+                </div>
                 <Link
                   href={`/learn/${scenario.id}`}
                   className="btn w-full mt-2 text-[12px] py-1"
@@ -284,6 +298,22 @@ export function Workspace({
           </div>
         )}
 
+        {!scenario && (
+          <details className="relative">
+            <summary className="chip cursor-pointer">选择任务</summary>
+            <div className="absolute right-0 top-full mt-2 w-64 panel p-3 shadow-pop z-40 space-y-2">
+              {missions.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/range/${targetId}?mission=${s.id}`}
+                  className="block text-xs text-slate-300 hover:text-white"
+                >
+                  {s.tier} · {s.title}
+                </Link>
+              ))}
+            </div>
+          </details>
+        )}
         {appliedDefenses.size > 0 && (
           <Link href={observeUrl(targetId)} className="chip text-ok border-ok/50" title="在观测页管理防护">
             <Icon name="shield-check" size={10} />
@@ -322,9 +352,21 @@ export function Workspace({
         <UserMenu />
       </header>
 
+      {runStatus !== "idle" && (
+        <div role="status" className="shrink-0 bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-800">
+          {runStatus === "queued" ? "排队中：前面的对话结束后会自动开始，请勿重复发送。" : "助手正在处理本轮任务…"}
+        </div>
+      )}
       <div className="flex-1 min-h-0">
         {ready ? (
-          <Sim simState={simState} messages={messages} onSend={send} onAct={act} onResetChat={resetChat} busy={busy} />
+          <Sim
+            simState={simState}
+            messages={messages}
+            onSend={send}
+            onAct={act}
+            onResetChat={resetChat}
+            busy={busy || runStatus !== "idle"}
+          />
         ) : worldError ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-500 px-6 text-center">
             <div className="text-sm text-red-600">无法打开产品</div>

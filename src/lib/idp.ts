@@ -6,6 +6,8 @@
  */
 import { createPrivateKey, createPublicKey, randomUUID, sign, verify } from "node:crypto";
 
+import { loadConfig } from "./config.ts";
+
 export const ISSUER = "https://auth.northstar.internal";
 export const KID = "corp-2026-09";
 
@@ -118,11 +120,7 @@ interface TokenHeader {
 }
 
 /**经 JWKS 校验 RS256 token：签名、iss、exp、scope。audience 是否强制由调用方决定。 */
-export async function verifyWithJwks(
-  origin: string,
-  token: string,
-  opts: { requireScope?: string } = {},
-): Promise<VerifyResult> {
+export async function verifyWithJwks(token: string, opts: { requireScope?: string } = {}): Promise<VerifyResult> {
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, detail: "malformed token" };
   const [headerB64, payloadB64, sigB64] = parts;
@@ -139,7 +137,10 @@ export async function verifyWithJwks(
 
   let jwk: Record<string, string> | undefined;
   try {
-    const resp = await fetch(`${origin}/idp/jwks.json`, { signal: AbortSignal.timeout(5000) });
+    // stdio 子进程只签发凭据；内部 HTTP 能力仅在应用执行验签时加载。
+    const { fetchInternal } = await import("../core/internal-http.ts");
+    const resp = await fetchInternal("/idp/jwks.json", `http://127.0.0.1:${loadConfig().port}`);
+    if (!resp.ok) return { ok: false, detail: "jwks unavailable" };
     const body = (await resp.json()) as { keys?: Array<Record<string, string>> };
     jwk = body.keys?.find((k) => k.kid === header.kid);
   } catch {

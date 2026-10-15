@@ -19,13 +19,12 @@ const EMPTY_USAGE = {
 
 function userText(message: AgentMessage): string {
   if (message.role !== "user") return "";
-  return typeof message.content === "string" ? message.content : contentText(message.content);
+  return contentText(message.content);
 }
 
 function assistantText(message: AgentMessage): string | null {
   if (message.role !== "assistant") return null;
-  const parts = message.content.filter((c) => c.type === "text").map((c) => c.text);
-  const text = parts.join("");
+  const text = contentText(message.content, "");
   return text === "" ? null : text;
 }
 
@@ -80,7 +79,7 @@ export function looksLikePiTranscript(raw: unknown): raw is AgentMessage[] {
   return Array.isArray(raw) && raw.length > 0 && raw.every(looksLikePiMessage);
 }
 
-/**当前 run 已完成的 assistant turn 数（Pi `shouldStopAfterTurn` 的 `newMessages`）。 */
+/**当前 run 已完成的 assistant turn 数（Pi `finishTurn` 的 `newMessages`）。 */
 export function assistantTurnsIn(messages: readonly AgentMessage[]): number {
   return messages.filter((m) => m.role === "assistant").length;
 }
@@ -126,6 +125,9 @@ export function attachTracer(agent: Agent, tracer: Tracer): () => void {
       } else if (m.role === "assistant") {
         tracer.record("model_msg", {
           content: assistantText(m),
+          duration_ms: m.durationMs,
+          stop_reason: m.stopReason,
+          error: m.errorMessage,
           reasoning: assistantThinking(m),
           tool_calls: assistantToolCalls(m),
         });
@@ -136,6 +138,8 @@ export function attachTracer(agent: Agent, tracer: Tracer): () => void {
       tracer.record("tool_result", {
         id: event.toolCallId,
         name: event.toolName,
+        duration_ms: event.durationMs,
+        is_error: event.isError,
         result: toolResultText(event.result).slice(0, 4000),
       });
     }
@@ -161,6 +165,9 @@ export async function createLabAgent(opts: {
     },
     streamFn: (m, context, options) => models.streamSimple(m, context, { ...options, temperature: opts.temperature }),
     toolExecution: "sequential",
-    shouldStopAfterTurn: ({ newMessages }) => assistantTurnsIn(newMessages) >= MAX_AGENT_TURNS,
+    finishTurn: ({ message, newMessages }) => {
+      if (message.stopReason === "error" || message.stopReason === "aborted") return;
+      if (assistantTurnsIn(newMessages) >= MAX_AGENT_TURNS) return { action: "end" };
+    },
   });
 }

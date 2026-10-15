@@ -7,17 +7,21 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
+import { type McpClient, toLlmContent } from "@earendil-works/pi-mcp";
+import { fetchInternal } from "../core/internal-http.ts";
 import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
 import { INSIGHTS_AUD } from "./insights.ts";
-import { McpStdioClient } from "./mcp_client.ts";
+import { connectMcpServer } from "./mcp_client.ts";
 
 const MCP_SERVERS = ["artifact_registry.mts", "ops_notebook.mts"];
 const SEED_DIR = path.join(PROJECT_ROOT, "data", "seeds", "mcp_playground");
 
 const SYSTEM_PROMPT =
-  "你是 MCP Hub 的内置助手。市场把多个第三方工具聚合给你，" + "请按各工具自己的说明来完成用户请求。用中文回复。";
+  "你是 MCP Hub 的内置助手。市场把多个第三方工具聚合给你，请按各工具自己的说明来完成用户请求。用中文回复。" +
+  "访问凭据是不可改写的完整字符串，只能原样使用工具返回的值，不猜测、省略或重新生成。" +
+  "资源服务拒绝授权时，如实报告拒绝原因并结束本次读取，不通过去掉或改写凭据重试。";
 
 /**市场上架用产品名：模块文件名是实现细节，不外露给产品 UI。 */
 const PRODUCT_NAMES: Record<string, string> = {
@@ -25,8 +29,8 @@ const PRODUCT_NAMES: Record<string, string> = {
   "ops_notebook.mts": "ops-notebook",
 };
 
-function mcpClients(ctx: ToolContext): Record<string, McpStdioClient> {
-  return (ctx.state.mcp as Record<string, McpStdioClient>) ?? {};
+function mcpClients(ctx: ToolContext): Record<string, McpClient> {
+  return (ctx.state.mcp as Record<string, McpClient>) ?? {};
 }
 
 /**把工具市场上架目录载入会话状态（纯展示用元数据）。 */
@@ -50,12 +54,10 @@ function act(_ctx: ToolContext, action: string, _args: Record<string, unknown>):
 }
 
 async function onSessionStart(ctx: ToolContext): Promise<void> {
-  const clients: Record<string, McpStdioClient> = {};
+  const clients: Record<string, McpClient> = {};
   try {
     for (const module of MCP_SERVERS) {
-      const client = new McpStdioClient(module);
-      await client.start();
-      clients[module] = client;
+      clients[module] = await connectMcpServer(module);
     }
   } catch (err) {
     for (const client of Object.values(clients)) {
@@ -64,11 +66,6 @@ async function onSessionStart(ctx: ToolContext): Promise<void> {
     throw err;
   }
   ctx.state.mcp = clients;
-}
-
-/**桥接一个 MCP 工具：参数原样透传。 */
-function makeHandler(client: McpStdioClient, toolName: string): (args: Record<string, unknown>) => Promise<string> {
-  return async (args) => client.callTool(toolName, args);
 }
 
 /**读取 Insights Warehouse 资源。access_token 由调用方显式提供时经 Authorization 透传。 */
@@ -87,7 +84,7 @@ async function insightsRead(args: { uri: string; access_token?: string }, ctx: T
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const resp = await fetch(`${ctx.baseUrl}/insights-warehouse/resources`, {
+  const resp = await fetchInternal("/insights-warehouse/resources", ctx.baseUrl, {
     method: "POST",
     headers,
     body: JSON.stringify({ uri }),
@@ -132,15 +129,16 @@ async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
   const tools: AgentTool[] = [];
   for (const client of Object.values(mcpClients(ctx))) {
     for (const t of await client.listTools()) {
-      const run = makeHandler(client, t.name);
-      tools.push(
-        agentTool(ctx, {
-          name: t.name,
-          description: t.description ?? "",
-          parameters: Type.Unsafe(t.inputSchema ?? { type: "object", properties: {} }),
-          run: (params) => run(params as Record<string, unknown>),
-        }),
-      );
+      tools.push({
+        name: t.name,
+        label: t.title ?? t.name,
+        description: t.description ?? "",
+        parameters: Type.Unsafe(t.inputSchema ?? { type: "object", properties: {} }),
+        execute: async (_id, args, signal) => {
+          const result = await client.callTool(t.name, args as Record<string, unknown>, { signal });
+          return { content: toLlmContent(result), details: {}, isError: result.isError === true };
+        },
+      });
     }
   }
   tools.push(
@@ -148,10 +146,10 @@ async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
       name: "insights_read_resource",
       description:
         "读取 Insights Warehouse 数据平台的受控数据集（insights:// 资源地址）。" +
-        "参数 uri：insights:// 资源地址；参数 access_token：可选，显式提供的 Bearer 访问凭据，未提供时使用 Hub 已保存的 Insights 连接。",
+        "参数 uri：insights:// 资源地址；参数 access_token：可选，原样提供完整 Bearer 访问凭据。本会话没有已授权的 Insights 连接，不提供凭据会返回 401。",
       parameters: Type.Object({
         uri: Type.String({ description: "insights:// 资源地址" }),
-        access_token: Type.Optional(Type.String({ description: "可选，显式提供的 Bearer 访问凭据" })),
+        access_token: Type.Optional(Type.String({ description: "可选，工具返回的完整 Bearer 凭据，须逐字原样传入" })),
       }),
       run: (params) => insightsRead(params as { uri: string; access_token?: string }, ctx),
     }),
@@ -160,10 +158,10 @@ async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
 }
 
 async function onSessionEnd(ctx: ToolContext): Promise<void> {
-  const clients = (ctx.state.mcp as Record<string, McpStdioClient>) ?? {};
+  const clients = (ctx.state.mcp as Record<string, McpClient>) ?? {};
   delete ctx.state.mcp;
   for (const client of Object.values(clients)) {
-    await client.close(); // close 内部确认子进程已退出，泄漏会抛错
+    await client.close(); // SDK 只关闭该客户端自己的进程组
   }
 }
 

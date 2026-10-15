@@ -13,11 +13,14 @@
     "build": "next build",
     "check": "biome check .",
     "format": "biome format --write .",
-    "test": "node --test --experimental-strip-types src/core/*.test.ts src/world/*.test.ts"
+    "test": "node --test --experimental-strip-types src/core/*.test.ts src/world/*.test.ts src/smoke/*.test.ts",
+    "smoke": "node --env-file-if-exists=.env src/smoke/run.ts",
+    "test:sandbox": "node --test --experimental-strip-types src/sandbox/integration.test.ts"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "0.85.1",
-    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-agent-core": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-mcp": "1.2.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "next": "^16.3.5",
     "react": "^19.3.0",

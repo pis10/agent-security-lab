@@ -30,8 +30,11 @@ export interface Scenario {
   /**可检测的成功条件。 */
   goal: string;
   /**逐步做法，卡住时再看。 */
-  solution: string;
+  solution?: string;
+  hints: string[];
   assertions: Assertion[];
+  /**防护实际作用的工具：开启全部防护后本轮调用过其中之一，才记一次复测。 */
+  retest_tools: string[];
   defenses: DefenseInfo[];
 }
 
@@ -55,6 +58,7 @@ export interface ChatMessage {
 }
 
 export interface WorldInfo {
+  run_status: "idle" | "queued" | "running";
   target_id: string;
   scenario_id: string | null;
   created: number;

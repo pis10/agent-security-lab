@@ -8,6 +8,6 @@ export const metadata = { title: "ASL · 教学" };
 
 export default async function Page() {
   const user = await requirePageUser("/learn");
-  const { scenarios, progress, meta } = catalogData(user.id);
+  const { scenarios, progress, meta } = catalogData(user);
   return <Academy scenarios={scenarios} progress={progress} meta={meta} />;
 }

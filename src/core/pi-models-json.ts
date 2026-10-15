@@ -9,17 +9,18 @@ import {
   type Api,
   type ApiKeyAuth,
   createProvider,
+  envApiKeyAuth,
   type Model,
   type MutableModels,
   type ProviderAuth,
 } from "@earendil-works/pi-ai";
-import * as anthropicMessages from "@earendil-works/pi-ai/api/anthropic-messages";
-import * as openaiCompletions from "@earendil-works/pi-ai/api/openai-completions";
+import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import type { Config, Env } from "../lib/config.ts";
 
 const CUSTOM_APIS = {
-  "openai-completions": openaiCompletions,
-  "anthropic-messages": anthropicMessages,
+  "openai-completions": openAICompletionsApi(),
+  "anthropic-messages": anthropicMessagesApi(),
 } as const;
 
 type CustomApi = keyof typeof CUSTOM_APIS;
@@ -50,19 +51,10 @@ export interface ModelsJsonSubset {
 
 /**`$VAR` 读环境变量（未设置则视为缺 Key）；字面量原样用；留空为免 Key 服务。 */
 function staticOrEnvApiKey(raw: string): ApiKeyAuth {
+  if (raw.startsWith("$")) return envApiKeyAuth("API key", [raw.slice(1)]);
   return {
     name: "API key",
-    resolve: async ({ ctx, signal }) => {
-      signal.throwIfAborted();
-      if (raw.startsWith("$")) {
-        const envVar = raw.slice(1);
-        const value = await ctx.env(envVar);
-        if (value) return { auth: { apiKey: value }, source: envVar };
-        return undefined;
-      }
-      if (raw === "") return { auth: { apiKey: KEYLESS_API_KEY }, source: "keyless" };
-      return { auth: { apiKey: raw }, source: "models.json" };
-    },
+    resolve: async () => ({ auth: { apiKey: raw || KEYLESS_API_KEY }, source: raw ? "models.json" : "keyless" }),
   };
 }
 
@@ -107,7 +99,7 @@ export function applyModelsJson(models: MutableModels, spec: ModelsJsonSubset): 
     const baseUrl = provider.baseUrl?.replace(/\/$/, "");
     if (!baseUrl) throw new Error(`models.json providers.${id} 缺少 baseUrl`);
     const api = provider.api ?? "openai-completions";
-    if (!(api in CUSTOM_APIS)) {
+    if (!Object.hasOwn(CUSTOM_APIS, api)) {
       throw new Error(
         `models.json providers.${id} 的 api 不受支持：${api}（仅 openai-completions / anthropic-messages）`,
       );

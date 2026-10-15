@@ -4,6 +4,7 @@ import { evaluate } from "../core/flags.ts";
 import { SINKS } from "../core/sinks.ts";
 import { defensesOf } from "../core/tools.ts";
 import { assertionLabel, type Observation, type ObservationCheck } from "../lib/contracts.ts";
+import { SCENARIOS } from "../scenarios/index.ts";
 import type { Scenario } from "../scenarios/types.ts";
 import type { World } from "./manager.ts";
 
@@ -32,4 +33,40 @@ export function evaluateScenario(world: World, scenario: Scenario, progress: Pro
     total: results.length,
     checks,
   };
+}
+
+/**只看本轮新增事件；历史通关、开启开关或页面轮询都不算复测。 */
+export function recordTurnProgress(
+  world: World,
+  progress: ProgressDB,
+  eventStart: number,
+  failed: boolean,
+  capturedBefore: ReadonlySet<string>,
+): void {
+  const events = world.tracer.events.slice(eventStart);
+  const enabled = defensesOf(world.ctx);
+  for (const scenario of SCENARIOS.filter((s) => s.target === world.targetId)) {
+    const tools = scenario.retest_tools;
+    const exercised = events.some((e) => e.kind === "tool_call" && tools.includes(String(e.data.name)));
+    if (capturedBefore.has(scenario.id) && exercised && scenario.defenses.every((d) => enabled.has(d.id))) {
+      const blocked = events.some(
+        (e) => e.kind === "policy_blocked" && scenario.defenses.some((d) => d.id === e.data.defense),
+      );
+      const error =
+        failed ||
+        events.some(
+          (e) =>
+            e.kind === "tool_result" &&
+            tools.includes(String(e.data.name)) &&
+            (e.data.is_error === true || String(e.data.result).startsWith("[error]")),
+        );
+      progress.recordRetest(
+        world.userId,
+        scenario.id,
+        error ? "error" : blocked ? "blocked" : "exercised",
+        [...enabled].sort(),
+      );
+    }
+    evaluateScenario(world, scenario, progress);
+  }
 }

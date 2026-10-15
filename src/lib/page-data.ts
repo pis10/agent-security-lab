@@ -1,5 +1,6 @@
 /**服务端页面数据：产品目录、课程、进度、世界摘要。 */
 
+import { scenarioForLearner } from "../core/teaching.ts";
 import { SCENARIOS } from "../scenarios/index.ts";
 import { listTargets, toTargetInfo } from "../targets/registry.ts";
 import { getWorldManager } from "../world/manager.ts";
@@ -11,7 +12,13 @@ export function llmMeta(): Meta {
   return { llm_model: `${config.llmProvider}/${config.llmModel}` };
 }
 
-export function catalogData(userId: number): {
+/**页面数据用到的登录者字段。 */
+interface Viewer {
+  id: number;
+  is_admin: boolean;
+}
+
+export function catalogData(viewer: Viewer): {
   targets: TargetInfo[];
   scenarios: Scenario[];
   progress: ProgressMap;
@@ -19,8 +26,8 @@ export function catalogData(userId: number): {
 } {
   return {
     targets: listTargets().map(toTargetInfo),
-    scenarios: SCENARIOS,
-    progress: getWorldManager().progress.captured(userId),
+    scenarios: SCENARIOS.map((s) => learnerScenario(s, viewer)),
+    progress: getWorldManager().progress.captured(viewer.id),
     meta: llmMeta(),
   };
 }
@@ -29,4 +36,10 @@ export function worldSummaries(userId: number): WorldInfo[] {
   return getWorldManager()
     .list(userId)
     .map(({ messages: _messages, ...rest }) => rest);
+}
+
+/**在服务端裁掉答案，覆盖目录、课程及产品页的 RSC 数据。 */
+export function learnerScenario(scenario: Scenario, viewer: Viewer): Scenario {
+  const answersVisible = getWorldManager().progress.answersVisible();
+  return scenarioForLearner(scenario, { answersVisible, isAdmin: viewer.is_admin });
 }

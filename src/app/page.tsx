@@ -8,5 +8,5 @@ export const metadata = { title: "ASL · 靶场" };
 
 export default async function Page() {
   const user = await requirePageUser("/");
-  return <RangeBoard {...catalogData(user.id)} />;
+  return <RangeBoard {...catalogData(user)} />;
 }

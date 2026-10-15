@@ -3,7 +3,7 @@
 services:
   asl:
     build: .
-    image: agent-security-lab
+    image: ${ASL_IMAGE:-agent-security-lab}
     container_name: agent-security-lab
     ports:
       - "127.0.0.1:8600:8600"
@@ -12,13 +12,43 @@ services:
         required: false
     volumes:
       - asl-data:/app/data/runtime
+      - asl-sandbox-ipc:/run/asl-sandbox:ro
+    depends_on:
+      sandbox:
+        condition: service_healthy
     read_only: true
     tmpfs:
       - /tmp
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+  sandbox:
+    build: .
+    image: ${ASL_IMAGE:-agent-security-lab}
+    command: ["node", "src/sandbox/broker.ts"]
+    user: "0:0"
+    environment:
+      ASL_SANDBOX_IMAGE: ${ASL_IMAGE:-agent-security-lab}
+      ASL_SANDBOX_OWNER: ${COMPOSE_PROJECT_NAME:-agent-security-lab}
+      # 与应用的对话并发一致：每轮工具串行，并发轮次同时读报告也不会排不上
+      ASL_SANDBOX_MAX_JOBS: ${ASL_MAX_CONCURRENT_TURNS:-4}
+    network_mode: none
+    read_only: true
+    mem_limit: 128m
+    pids_limit: 32
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - asl-sandbox-ipc:/run/asl-sandbox
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get({socketPath:'/run/asl-sandbox/execute.sock',path:'/health'},r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 2s
+      retries: 6
 
 volumes:
   asl-data:
     name: asl-data
+  asl-sandbox-ipc:

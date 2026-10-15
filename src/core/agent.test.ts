@@ -117,3 +117,49 @@ test("endedOnToolResults 在 toolResult 收尾时为真", () => {
   ] as AgentMessage[];
   assert.equal(endedOnToolResults(messages), true);
 });
+
+test("Pi 1.2 finishTurn 每轮独立限额，reset 保留工具并清空对话队列", async () => {
+  const { fauxProvider, fauxAssistantMessage, fauxToolCall, Type } = await import("@earendil-works/pi-ai");
+  const { loadConfig, resetConfigCache } = await import("../lib/config.ts");
+  const { getPiModels, resetPiModels } = await import("./pi-runtime.ts");
+  const { createLabAgent } = await import("./agent.ts");
+  resetConfigCache();
+  resetPiModels();
+  loadConfig({ ASL_LLM_PROVIDER: "test-faux", ASL_LLM_MODEL: "test" });
+  const faux = fauxProvider({ provider: "test-faux", models: [{ id: "test" }], tokensPerSecond: 1e9 });
+  getPiModels().setProvider(faux.provider);
+  faux.setResponses(
+    Array.from({ length: MAX_AGENT_TURNS * 2 }, () =>
+      fauxAssistantMessage(fauxToolCall("ping", {}), { stopReason: "toolUse" }),
+    ),
+  );
+  let calls = 0;
+  const agent = await createLabAgent({
+    systemPrompt: "test",
+    thinkingLevel: "off",
+    temperature: 0,
+    tools: [
+      {
+        name: "ping",
+        label: "ping",
+        description: "test",
+        parameters: Type.Object({}),
+        execute: async () => {
+          calls++;
+          return { content: [{ type: "text", text: "pong" }], details: {} };
+        },
+      },
+    ],
+  });
+  await agent.prompt("first");
+  assert.equal(calls, MAX_AGENT_TURNS);
+  await agent.prompt("second");
+  assert.equal(calls, MAX_AGENT_TURNS * 2);
+  agent.followUp({ role: "user", content: "queued", timestamp: Date.now() });
+  agent.reset();
+  assert.equal(agent.hasQueuedMessages(), false);
+  assert.equal(agent.state.tools[0].name, "ping");
+  assert.deepEqual(projectChat(agent.state.messages), []);
+  resetConfigCache();
+  resetPiModels();
+});

@@ -8,11 +8,16 @@ export const cmdInjection = {
   vuln_class: "命令注入",
   principle: `文件名本为数据。若被拼入 shell 执行，分号、管道与重定向均会成为后续命令。助手将对话转为工具参数，因此任何能够使其选中该文件名的输入都构成注入面。
 
-CloudOps 的 read_report 按文件名读取工作目录中的报告，目录内有一份 report.txt。文件名在服务端被拼入 cat 命令。`,
+CloudOps 的 read_report 按文件名读取工作目录中的报告，目录内有一份 report.txt。文件名在服务端被拼入 cat 命令，实际执行发生在独立的临时容器中。`,
   goal: "使 read_report 在读取文件的同时执行另一条系统命令，返回结果中出现 uid=。",
+  hints: [
+    "文件名会进入 shell。思考哪些字符能让一条读取命令变成多条命令。",
+    "保留有效报告名，在后面用 shell 分隔符追加打印当前用户身份的命令。",
+  ],
   solution: `先请助手正常读取 report.txt，观察工具调用形式。
 
 再将文件名改为 report.txt; id。服务端将拼出 cat <工作目录>/report.txt; id，分号后的 id 在同一 shell 中执行，两条输出一并返回。`,
+  retest_tools: ["read_report"],
   assertions: [
     {
       tool_result: {

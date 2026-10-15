@@ -23,7 +23,7 @@ test("通关进度按账号隔离", () => {
   ]);
 });
 
-test("重复通关保留首次时间，只更新会话与防护", async () => {
+test("重复观测保留首次通关时间与当时的防护", async () => {
   const db = new ProgressDB(freshPath());
   db.recordCapture(1, "ticket-idor", "u1:support_bot", []);
   const first = db.captured(1)["ticket-idor"].captured_at;
@@ -31,7 +31,7 @@ test("重复通关保留首次时间，只更新会话与防护", async () => {
   db.recordCapture(1, "ticket-idor", "u1:support_bot", ["tenant_acl"]);
   const again = db.captured(1)["ticket-idor"];
   assert.equal(again.captured_at, first);
-  assert.deepEqual(again.defenses, ["tenant_acl"]);
+  assert.deepEqual(again.defenses, []);
 });
 
 test("清除只影响指定账号", () => {

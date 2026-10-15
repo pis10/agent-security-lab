@@ -23,6 +23,9 @@ export interface Config {
   modelsJsonPath: string | null;
   customLlm: CustomLlm | null;
   port: number;
+  maxConcurrentTurns: number;
+  turnTimeoutMs: number;
+  worldIdleMs: number;
 }
 
 let cached: Config | null = null;
@@ -63,6 +66,13 @@ function parseCustomLlm(env: Env): CustomLlm | null {
   };
 }
 
+function positiveInt(env: Env, key: string, fallback: number): number {
+  const value = Number(env[key] ?? fallback);
+  if (!Number.isSafeInteger(value) || value <= 0 || value > 2_147_483_647)
+    throw new Error(`${key} 须为正整数（不超过 2147483647）`);
+  return value;
+}
+
 export function loadConfig(env: Env = process.env): Config {
   if (cached) return cached;
   const modelsJson = env.ASL_MODELS_JSON?.trim() ?? "";
@@ -75,6 +85,9 @@ export function loadConfig(env: Env = process.env): Config {
     modelsJsonPath: modelsJson === "" ? null : modelsJson,
     customLlm,
     port: Number.parseInt(env.PORT || "8600", 10),
+    maxConcurrentTurns: positiveInt(env, "ASL_MAX_CONCURRENT_TURNS", 4),
+    turnTimeoutMs: positiveInt(env, "ASL_TURN_TIMEOUT_MS", 120_000),
+    worldIdleMs: positiveInt(env, "ASL_WORLD_IDLE_MS", 900_000),
   };
   return cached;
 }

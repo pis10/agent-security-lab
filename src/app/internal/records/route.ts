@@ -1,4 +1,5 @@
-import { SINKS } from "@/core/sinks.ts";
+import { denyExternalRequest } from "../../../core/internal-http.ts";
+import { SINKS } from "../../../core/sinks.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,8 @@ function sessionOf(req: Request): string {
 }
 
 export async function GET(req: Request) {
+  const denied = denyExternalRequest(req);
+  if (denied) return denied;
   SINKS.add(sessionOf(req), "internal", { endpoint: "/internal/records" });
   return Response.json({
     rows: [

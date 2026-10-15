@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, errorText } from "./api";
 import { Icon } from "./components/Icon";
@@ -192,7 +193,15 @@ export function AdminUsers({
       <main className="max-w-5xl mx-auto px-6 py-12">
         <div className="mb-8">
           <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">管理</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">账号管理</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">账号管理</h1>
+            <Link
+              href="/admin/progress"
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              教学进度
+            </Link>
+          </div>
           <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
             为学员创建账号，并把初始密码转交本人。每个账号的产品数据与通关进度相互独立。
           </p>

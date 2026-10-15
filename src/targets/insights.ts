@@ -87,7 +87,7 @@ export async function readResource(request: Request): Promise<Response> {
     record("401 missing bearer credential");
     return json(401, { error: "invalid_token", detail: "missing bearer credential" });
   }
-  const verdict = await verifyWithJwks(new URL(request.url).origin, token, { requireScope: "mcp.invoke" });
+  const verdict = await verifyWithJwks(token, { requireScope: "mcp.invoke" });
   if (!verdict.ok) {
     record(`401 ${verdict.detail}`, verdict.presentedAud);
     return json(401, { error: "invalid_token", detail: verdict.detail });

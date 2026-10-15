@@ -6,6 +6,7 @@ import { productOf } from "./catalog";
 import { Tag, TierBadge } from "./components/Badge";
 import { Icon } from "./components/Icon";
 import { Shell } from "./components/Shell";
+import { TaskHints } from "./components/TaskHints";
 import type { Meta, Observation, ProgressMap, Scenario, TargetInfo } from "./types";
 import { assertionLabel } from "./types";
 
@@ -163,8 +164,8 @@ export function Lesson({
               <p className="text-[12px] text-slate-400 mt-2">相关记录见观测页的时间线与外发箱。</p>
             </section>
 
-            <Drawer icon="lightbulb" label="答案">
-              <p className="whitespace-pre-wrap">{scenario.solution}</p>
+            <Drawer icon="lightbulb" label="提示与答案">
+              <TaskHints key={scenario.id} scenario={scenario} />
             </Drawer>
 
             {scenario.defenses.length > 0 && (

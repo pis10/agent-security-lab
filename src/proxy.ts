@@ -1,6 +1,6 @@
 /**未登录的请求：页面跳登录页（登录后回到原页），接口返回 401。只看会话 cookie 在不在，校验在各页面与接口里。
  *
- * 仿真产品的站内服务（外发箱、假内网、拨测站点、IdP、Insights）由工具在服务端调用，不经过登录。
+ * 仿真产品的站内服务（外发箱、假内网、拨测站点、IdP、Insights）由工具在服务端调用，各路由独立校验进程内部凭据，不使用浏览器登录态。
  */
 import { type NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "./lib/contracts.ts";

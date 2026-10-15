@@ -1,7 +1,10 @@
+import { denyExternalRequest } from "../../../../core/internal-http.ts";
 /**edge-gateway 健康端点：总览「服务健康拨测」登记的巡检目标之一。 */
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = denyExternalRequest(req);
+  if (denied) return denied;
   return Response.json({
     service: "edge-gateway",
     status: "ok",

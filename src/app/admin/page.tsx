@@ -8,6 +8,6 @@ export const metadata = { title: "ASL · 账号管理" };
 
 export default async function Page() {
   const user = await requirePageAdmin("/admin");
-  const { meta, progress, scenarios } = catalogData(user.id);
+  const { meta, progress, scenarios } = catalogData(user);
   return <AdminUsers meta={meta} progress={progress} scenarioCount={scenarios.length} selfId={user.id} />;
 }

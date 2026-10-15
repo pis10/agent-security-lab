@@ -13,6 +13,6 @@ export default async function Page() {
   if (worlds.length === 1) {
     redirect(`/observe/${worlds[0].target_id}`);
   }
-  const { meta, progress, scenarios } = catalogData(user.id);
+  const { meta, progress, scenarios } = catalogData(user);
   return <ObserveBoard worlds={worlds} meta={meta} progress={progress} scenarioCount={scenarios.length} />;
 }

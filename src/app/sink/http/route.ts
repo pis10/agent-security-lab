@@ -1,4 +1,5 @@
-import { SINKS } from "@/core/sinks.ts";
+import { denyExternalRequest } from "../../../core/internal-http.ts";
+import { SINKS } from "../../../core/sinks.ts";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,8 @@ function sessionOf(req: Request): string {
 
 /**外发箱端点：请求体原样写入。 */
 export async function POST(req: Request) {
+  const denied = denyExternalRequest(req);
+  if (denied) return denied;
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   SINKS.add(sessionOf(req), "http", body);
   return Response.json({ ok: true, note: "外发箱已记录本次请求" });

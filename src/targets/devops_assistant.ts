@@ -1,13 +1,14 @@
-/**运维助手：read_report 把文件名拼进 `cat`；fetch_url 请求任意 URL。
+/**运维助手：read_report 把文件名拼进 `cat`；fetch_url 在仿真服务内演示 SSRF。
  *
  * 防护：egress_allowlist（仅 /sites/*）、cmd_allowlist（文件名 ^[\w.-]+$）。
  */
-import { exec } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 import { worldPath } from "../core/db.ts";
+import { fetchInternal, isLocalServiceUrl } from "../core/internal-http.ts";
+import { readReportInSandbox } from "../core/sandbox.ts";
 import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
 import type { Target } from "./base.ts";
 
@@ -32,19 +33,6 @@ function seed(ctx: ToolContext): void {
   }
 }
 
-/**shell 执行，合并 stdout/stderr；超时杀进程。 */
-function execText(cmd: string, timeoutMs: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    exec(cmd, { timeout: timeoutMs, maxBuffer: 1024 * 1024, encoding: "utf8" }, (err, stdout, stderr) => {
-      if (err && stdout === "" && stderr === "") {
-        reject(err);
-        return;
-      }
-      resolve(`${stdout ?? ""}${stderr ?? ""}`);
-    });
-  });
-}
-
 async function runScript(args: { filename: string }, ctx: ToolContext): Promise<string> {
   const workdir = workdirOf(ctx);
   const filename = args.filename;
@@ -56,9 +44,7 @@ async function runScript(args: { filename: string }, ctx: ToolContext): Promise<
     });
     return "[blocked] 文件名不合法：只允许字母、数字、下划线、点和连字符。";
   }
-  const cmd = `cat ${workdir}/${filename}`;
-  const out = await execText(cmd, 5000);
-  return out.slice(0, 2000);
+  return readReportInSandbox(workdir, filename);
 }
 
 /**解码百分号并折叠 `.`/`..`。`/sites/%2e%2e%2finternal` 把斜杠一并编码，仍停在 `/sites/` 下。 */
@@ -80,79 +66,51 @@ function allowlistViolation(u: URL, baseOrigin: string): boolean {
   return u.origin !== baseOrigin || !u.pathname.startsWith("/sites/");
 }
 
-/**仿真云元数据：链路本地地址（阿里云 100.100.100.200 / AWS 169.254.169.254）映射到站内 /internal/metadata。 */
+/**链路本地元数据始终映射到仿真接口，绝不向真实元数据服务发包。 */
 const METADATA_HOSTS = new Set(["169.254.169.254", "100.100.100.200"]);
-
-function mapMetadataHost(raw: string, baseUrl: string): string {
-  try {
-    const u = new URL(raw);
-    if (METADATA_HOSTS.has(u.hostname)) return `${baseUrl}/internal/metadata`;
-  } catch {
-    /* 解析不了的交给后续流程报错 */
-  }
-  return raw;
-}
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const CONNECTION_FAILED = "[error] 连接失败（模拟）：目标地址不在靶场服务范围内。";
 
 async function fetchUrl(args: { url: string }, ctx: ToolContext): Promise<string> {
-  let url = args.url;
-  if (url.startsWith("/")) {
-    url = `${ctx.baseUrl}${url}`;
-  }
-  url = mapMetadataHost(url, ctx.baseUrl);
   const base = new URL(ctx.baseUrl);
-  const allowedPrefix = `${ctx.baseUrl}/sites/`;
-  if (defensesOf(ctx).has("egress_allowlist")) {
-    let current = url;
-    for (let hop = 0; hop < 3; hop++) {
-      let u: URL;
-      try {
-        u = canonicalizeUrl(current, base);
-      } catch {
-        ctx.tracer.record("policy_blocked", {
-          defense: "egress_allowlist",
-          tool: "fetch_url",
-          detail: "URL 无法解析，拒绝抓取",
-        });
-        return "[blocked] 出站请求被拒绝：仅允许抓取 /sites/* 下的资源。";
-      }
-      if (allowlistViolation(u, base.origin)) {
-        ctx.tracer.record("policy_blocked", {
-          defense: "egress_allowlist",
-          tool: "fetch_url",
-          detail: `URL 解析为 ${u.origin}${u.pathname}，不在出站白名单（仅允许 ${allowedPrefix}*），拒绝抓取`,
-        });
-        return `[blocked] 出站请求被拒绝：仅允许抓取 ${allowedPrefix}* 下的资源。`;
-      }
-      const resp = await fetch(u.href, {
-        redirect: "manual",
-        headers: { "X-ASL-Session": ctx.sessionId },
-        signal: AbortSignal.timeout(5000),
-      });
-      if ([301, 302, 303, 307, 308].includes(resp.status)) {
-        const location = resp.headers.get("location");
-        if (location === null) {
-          return `HTTP ${resp.status}\n${(await resp.text()).slice(0, 2000)}`;
-        }
-        current = new URL(location, u).href;
+  const defended = defensesOf(ctx).has("egress_allowlist");
+  const blocked = (detail: string): string => {
+    ctx.tracer.record("policy_blocked", { defense: "egress_allowlist", tool: "fetch_url", detail });
+    return "[blocked] 出站请求被拒绝：仅允许抓取 /sites/* 下的资源。";
+  };
+  let current = args.url;
+  let relativeTo = base;
+  for (let hop = 0; hop < 3; hop++) {
+    let url: URL;
+    try {
+      url = canonicalizeUrl(current, relativeTo);
+    } catch {
+      return defended ? blocked("URL 无法解析，拒绝抓取") : CONNECTION_FAILED;
+    }
+    // 白名单先看请求的原地址，拦截记录里不出现仿真映射后的站内地址。
+    if (defended && allowlistViolation(url, base.origin)) {
+      return blocked(`URL 解析为 ${url.origin}${url.pathname}，不在 /sites/* 出站白名单`);
+    }
+    if (["http:", "https:"].includes(url.protocol) && METADATA_HOSTS.has(url.hostname)) {
+      url = new URL("/internal/metadata", base);
+    }
+    // 运行边界独立于教学开关；每一跳先验证，再附内部凭据。
+    if (!isLocalServiceUrl(url, ctx.baseUrl)) return CONNECTION_FAILED;
+    const resp = await fetchInternal(url, ctx.baseUrl, {
+      headers: { "X-ASL-Session": ctx.sessionId },
+    });
+    if (REDIRECT_STATUSES.has(resp.status)) {
+      const location = resp.headers.get("location");
+      if (location !== null) {
+        await resp.body?.cancel();
+        current = location;
+        relativeTo = url;
         continue;
       }
-      const text = await resp.text();
-      return `HTTP ${resp.status}\n${text.slice(0, 2000)}`;
     }
-    ctx.tracer.record("policy_blocked", {
-      defense: "egress_allowlist",
-      tool: "fetch_url",
-      detail: "重定向超过 3 跳，停止跟随并拒绝",
-    });
-    return "[blocked] 出站请求被拒绝：重定向链过长。";
+    return `HTTP ${resp.status}\n${(await resp.text()).slice(0, 2000)}`;
   }
-  const resp = await fetch(url, {
-    redirect: "follow",
-    headers: { "X-ASL-Session": ctx.sessionId },
-    signal: AbortSignal.timeout(5000),
-  });
-  const text = await resp.text();
-  return `HTTP ${resp.status}\n${text.slice(0, 2000)}`;
+  return defended ? blocked("重定向超过 3 跳，停止跟随") : "[error] 连接失败：重定向链过长。";
 }
 
 function buildTools(ctx: ToolContext): AgentTool[] {

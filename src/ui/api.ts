@@ -1,3 +1,4 @@
+import type { TeachingRow } from "../core/teaching.ts";
 import {
   type AdminUser,
   type Observation,
@@ -81,6 +82,9 @@ export const api = {
       "/api/auth/password",
       post({ current_password: currentPassword, new_password: newPassword }),
     ),
+  teachingProgress: () => req<{ rows: TeachingRow[] }>("/api/admin/progress"),
+  setAnswersVisible: (visible: boolean) =>
+    req<{ answers_visible: boolean }>("/api/admin/settings", post({ answers_visible: visible })),
   adminUsers: () => req<{ users: AdminUser[] }>("/api/admin/users"),
   adminCreateUser: (username: string, displayName: string, isAdmin: boolean) =>
     req<{ user: AdminUser; initial_password: string }>(
