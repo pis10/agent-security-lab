@@ -1,19 +1,24 @@
-/**Pi 模型：包内 builtin catalog；可选 ASL_MODELS_JSON。 */
+/**Pi 模型：包内 builtin catalog；可选 ASL_MODELS_JSON 与 .env 单模型（ASL_LLM_BASE_URL）。 */
 import type { Api, Model, MutableModels } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { loadConfig } from "../lib/config.ts";
-import { applyModelsJsonFile } from "./pi-models-json.ts";
+import { applyModelsJson, applyModelsJsonFile, envCustomProvider, type ModelsJsonSubset } from "./pi-models-json.ts";
 
-export function createPiModels(modelsJsonPath: string | null = null): MutableModels {
+export function createPiModels(
+  modelsJsonPath: string | null = null,
+  custom: ModelsJsonSubset | null = null,
+): MutableModels {
   const models = builtinModels();
   if (modelsJsonPath) applyModelsJsonFile(models, modelsJsonPath);
+  if (custom) applyModelsJson(models, custom);
   return models;
 }
 
 export function getPiModels(): MutableModels {
   const g = globalThis as { __aslPiModels?: MutableModels };
   if (!g.__aslPiModels) {
-    g.__aslPiModels = createPiModels(loadConfig().modelsJsonPath);
+    const config = loadConfig();
+    g.__aslPiModels = createPiModels(config.modelsJsonPath, envCustomProvider(config));
   }
   return g.__aslPiModels;
 }
@@ -28,7 +33,7 @@ export function getConfiguredModel(): Model<Api> {
   const model = getPiModels().getModel(config.llmProvider, config.llmModel);
   if (!model) {
     throw new Error(
-      `未知模型：${config.llmProvider}/${config.llmModel}。请核对该厂商的模型 id，或在 ASL_MODELS_JSON 中声明。`,
+      `未知模型：${config.llmProvider}/${config.llmModel}。请核对该厂商的模型 id；自建模型请设置 ASL_LLM_BASE_URL，或在 ASL_MODELS_JSON 中声明。`,
     );
   }
   return model;
