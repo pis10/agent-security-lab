@@ -6,9 +6,9 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { ProgressDB } from "../core/db.ts";
 import { BadRequestError, ConflictError, NotFoundError } from "../core/errors.ts";
-import { resetPiModels } from "../core/pi-runtime.ts";
+import { installTestLlm } from "../core/llm-testing.ts";
 import { SINKS } from "../core/sinks.ts";
-import { loadConfig, resetConfigCache } from "../lib/config.ts";
+import { loadConfig } from "../lib/config.ts";
 import { requireScenario } from "../scenarios/index.ts";
 import { WorldManager, worldKey } from "./manager.ts";
 import { evaluateScenario } from "./observations.ts";
@@ -20,11 +20,13 @@ let manager: WorldManager;
 
 before(() => {
   // 自建模型配置只为通过 requireLlm 与建 Agent；对话测试替换模型调用，不访问外网。
-  process.env.ASL_LLM_BASE_URL = "http://127.0.0.1:9/v1";
-  process.env.ASL_LLM_MODEL = "test-model";
-  process.env.ASL_LLM_API_KEY = "test-key";
-  resetConfigCache();
-  resetPiModels();
+  installTestLlm({
+    kind: "openai-completions",
+    provider: "custom",
+    model: "test-model",
+    base_url: "http://127.0.0.1:9/v1",
+    api_key: "test-key",
+  });
   manager = new WorldManager(loadConfig(), { usersDir, progress });
 });
 

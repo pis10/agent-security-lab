@@ -1,3 +1,4 @@
+import { getSettingsDb } from "@/core/settings.ts";
 import { teachingRows } from "@/core/teaching.ts";
 import { ensureAccountsReady, requirePageAdmin } from "@/lib/auth.ts";
 import { catalogData } from "@/lib/page-data.ts";
@@ -16,7 +17,7 @@ export default async function Page() {
   return (
     <TeachingProgress
       initialRows={teachingRows(users, SCENARIOS, db)}
-      answersVisible={db.answersVisible()}
+      answersVisible={getSettingsDb().answersVisible()}
       meta={meta}
       progress={progress}
       scenarioCount={SCENARIOS.length}

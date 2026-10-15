@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { assistantTurnsIn, endedOnToolResults, looksLikePiTranscript, MAX_AGENT_TURNS, projectChat } from "./agent.ts";
+import {
+  assistantTurnsIn,
+  endedOnToolResults,
+  lastAssistantText,
+  looksLikePiTranscript,
+  MAX_AGENT_TURNS,
+  projectChat,
+} from "./agent.ts";
 
 const usage = {
   input: 0,
@@ -120,12 +127,10 @@ test("endedOnToolResults 在 toolResult 收尾时为真", () => {
 
 test("Pi 1.2 finishTurn 每轮独立限额，reset 保留工具并清空对话队列", async () => {
   const { fauxProvider, fauxAssistantMessage, fauxToolCall, Type } = await import("@earendil-works/pi-ai");
-  const { loadConfig, resetConfigCache } = await import("../lib/config.ts");
-  const { getPiModels, resetPiModels } = await import("./pi-runtime.ts");
+  const { getPiModels } = await import("./llm.ts");
+  const { installTestLlm } = await import("./llm-testing.ts");
   const { createLabAgent } = await import("./agent.ts");
-  resetConfigCache();
-  resetPiModels();
-  loadConfig({ ASL_LLM_PROVIDER: "test-faux", ASL_LLM_MODEL: "test" });
+  installTestLlm({ kind: "builtin", provider: "test-faux", model: "test" });
   const faux = fauxProvider({ provider: "test-faux", models: [{ id: "test" }], tokensPerSecond: 1e9 });
   getPiModels().setProvider(faux.provider);
   faux.setResponses(
@@ -136,8 +141,6 @@ test("Pi 1.2 finishTurn 每轮独立限额，reset 保留工具并清空对话�
   let calls = 0;
   const agent = await createLabAgent({
     systemPrompt: "test",
-    thinkingLevel: "off",
-    temperature: 0,
     tools: [
       {
         name: "ping",
@@ -160,6 +163,33 @@ test("Pi 1.2 finishTurn 每轮独立限额，reset 保留工具并清空对话�
   assert.equal(agent.hasQueuedMessages(), false);
   assert.equal(agent.state.tools[0].name, "ping");
   assert.deepEqual(projectChat(agent.state.messages), []);
-  resetConfigCache();
-  resetPiModels();
+});
+
+test("管理员改了模型设置：已有 Agent 下一轮切到新模型，历史保留", async () => {
+  const { fauxProvider, fauxAssistantMessage, fauxText } = await import("@earendil-works/pi-ai");
+  const { getPiModels, resetLlmRuntime } = await import("./llm.ts");
+  const { installTestLlm, TEST_LLM_DEFAULTS } = await import("./llm-testing.ts");
+  const { createLabAgent, syncAgentModel } = await import("./agent.ts");
+  const register = () => {
+    const a = fauxProvider({ provider: "faux-a", models: [{ id: "a" }], tokensPerSecond: 1e9 });
+    const b = fauxProvider({ provider: "faux-b", models: [{ id: "b" }], tokensPerSecond: 1e9 });
+    getPiModels().setProvider(a.provider);
+    getPiModels().setProvider(b.provider);
+    a.setResponses([fauxAssistantMessage(fauxText("from a"))]);
+    b.setResponses([fauxAssistantMessage(fauxText("from b"))]);
+  };
+  const db = installTestLlm({ kind: "builtin", provider: "faux-a", model: "a" });
+  register();
+  const agent = await createLabAgent({ systemPrompt: "test", tools: [] });
+  await agent.prompt("one");
+  assert.equal(lastAssistantText(agent.state.messages), "from a");
+  db.setLlm({ ...TEST_LLM_DEFAULTS, kind: "builtin", provider: "faux-b", model: "b", thinking: "low" }, 1);
+  resetLlmRuntime();
+  register();
+  await syncAgentModel(agent);
+  assert.equal(agent.state.model.provider, "faux-b");
+  assert.equal(agent.state.thinkingLevel, "low");
+  await agent.prompt("two");
+  assert.equal(lastAssistantText(agent.state.messages), "from b");
+  assert.equal(projectChat(agent.state.messages).length, 4);
 });

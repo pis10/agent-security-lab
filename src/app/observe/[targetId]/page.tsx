@@ -19,14 +19,14 @@ export default async function Page({ params }: Props) {
   const user = await requirePageUser(`/observe/${targetId}`);
   const target = findTarget(targetId);
   if (!target) notFound();
-  const { meta, progress, scenarios } = catalogData(user);
+  const { meta, progress, scenarios, targets } = catalogData(user);
   return (
     <ObserveStudio
-      targetId={targetId}
       target={toTargetInfo(target)}
+      targets={targets}
+      scenarios={scenarios}
       meta={meta}
       progress={progress}
-      scenarioCount={scenarios.length}
     />
   );
 }

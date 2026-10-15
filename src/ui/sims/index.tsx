@@ -10,7 +10,7 @@ import SupportShop from "./SupportShop";
 function SimPlaceholder({ messages, onSend, busy }: SimProps) {
   return (
     <div className="h-full flex flex-col items-center justify-center gap-4 p-8">
-      <div className="w-full max-w-lg panel h-96">
+      <div className="w-full max-w-lg h-96 rounded-lg border border-edge bg-panel">
         <SimChat messages={messages} onSend={onSend} busy={busy} />
       </div>
     </div>

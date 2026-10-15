@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requirePageUser } from "@/lib/auth.ts";
 import { learnerScenario, llmMeta } from "@/lib/page-data.ts";
 import { getScenario, SCENARIOS } from "@/scenarios/index.ts";
-import { findTarget } from "@/targets/registry.ts";
+import { findTarget, toTargetInfo } from "@/targets/registry.ts";
 import { productOf } from "@/ui/catalog.ts";
 import { Workspace } from "@/ui/Workspace";
 
@@ -25,13 +25,14 @@ export default async function Page({ params, searchParams }: Props) {
   const user = await requirePageUser(
     `/range/${targetId}${missionId ? `?mission=${encodeURIComponent(missionId)}` : ""}`,
   );
-  if (!findTarget(targetId)) notFound();
+  const target = findTarget(targetId);
+  if (!target) notFound();
   const scenario = missionId ? getScenario(missionId) : null;
   if (missionId && (!scenario || scenario.target !== targetId)) notFound();
   return (
     <Workspace
       missions={SCENARIOS.filter((s) => s.target === targetId).map((s) => learnerScenario(s, user))}
-      targetId={targetId}
+      target={toTargetInfo(target)}
       missionId={missionId}
       scenario={scenario && scenario.target === targetId ? learnerScenario(scenario, user) : null}
       meta={llmMeta()}

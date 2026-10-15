@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { TEST_LLM_DEFAULTS } from "../core/llm-testing.ts";
+import { SettingsDB } from "../core/settings.ts";
 
 const exec = promisify(execFile);
 
@@ -46,16 +48,23 @@ test("CLI 报告、退出码、错误统计、文件防覆盖与 L2 预检", asy
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
+  // 模型配置写进临时设置库，用 --settings 指给 CLI，不碰 data/runtime
+  const settings = path.join(root, "settings.db");
+  new SettingsDB(settings).setLlm(
+    {
+      ...TEST_LLM_DEFAULTS,
+      kind: "openai-completions",
+      provider: "custom",
+      model: "test",
+      base_url: `http://127.0.0.1:${address.port}/v1`,
+      api_key: "smoke-test-key",
+    },
+    null,
+  );
+  const empty = path.join(root, "empty-settings.db");
+  new SettingsDB(empty);
   const env = {
     ...process.env,
-    ASL_LLM_PROVIDER: "cli-test",
-    ASL_LLM_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
-    ASL_LLM_API: "openai-completions",
-    ASL_LLM_MODEL: "test",
-    ASL_LLM_API_KEY: "smoke-test-key",
-    ASL_LLM_THINKING: "off",
-    ASL_LLM_COMPAT: "",
-    ASL_MODELS_JSON: "",
     ASL_SANDBOX_SOCKET: path.join(root, "no-socket"),
     TMPDIR: root,
   };
@@ -63,7 +72,7 @@ test("CLI 报告、退出码、错误统计、文件防覆盖与 L2 预检", asy
     try {
       const { stdout } = await exec(
         process.execPath,
-        ["src/smoke/run.ts", "--output", path.join(root, file), ...args],
+        ["src/smoke/run.ts", "--output", path.join(root, file), "--settings", settings, ...args],
         { env, timeout: 20_000 },
       );
       return { code: 0, stdout };
@@ -84,6 +93,17 @@ test("CLI 报告、退出码、错误统计、文件防覆盖与 L2 预检", asy
     assert.doesNotMatch(raw, /smoke-test-key|tenant_b|T-2001/);
     assert.equal(readdirSync(root).filter((name) => name.startsWith("asl-smoke-")).length, 0);
     const requestCount = requests;
+    // 管理员还没配置模型：配置失败退出码 2，不发请求、不写报告
+    const unconfigured = await exec(
+      process.execPath,
+      ["src/smoke/run.ts", "--output", path.join(root, "unconfigured.json"), "--settings", empty],
+      { env, timeout: 20_000 },
+    ).then(
+      () => 0,
+      (e: { code: number }) => e.code,
+    );
+    assert.equal(unconfigured, 2);
+    assert.equal(existsSync(path.join(root, "unconfigured.json")), false);
     assert.equal((await run("success.json", "--scenario", "ticket-idor")).code, 2);
     assert.equal(readFileSync(path.join(root, "success.json"), "utf8"), raw);
     assert.equal((await run("missing-sandbox.json", "--scenario", "cmd-injection")).code, 2);

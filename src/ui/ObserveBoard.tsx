@@ -1,37 +1,39 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { tierRank } from "../scenarios/types.ts";
 import { api } from "./api";
-import { productOf } from "./catalog";
+import { observeUrl, productOf, rangeUrl } from "./catalog";
+import { Tag, TierBadge } from "./components/Badge";
 import { Icon } from "./components/Icon";
-import { Shell } from "./components/Shell";
-import type { Meta, ProgressMap, WorldInfo } from "./types";
+import { PageHeader, Shell, useLiveProgress } from "./components/Shell";
+import type { Meta, ProgressMap, Scenario, TargetInfo, WorldInfo } from "./types";
 
+function Metric({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div>
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className={`text-[18px] font-semibold tabular-nums ${value > 0 && tone ? tone : "text-ink"}`}>{value}</div>
+    </div>
+  );
+}
+
+/**观测总览：四个产品的调用、外发与防护一览，进入后看完整时间线。 */
 export function ObserveBoard({
   worlds: initialWorlds,
+  targets,
+  scenarios,
   meta,
-  progress,
-  scenarioCount,
+  progress: initialProgress,
 }: {
   worlds: WorldInfo[];
+  targets: TargetInfo[];
+  scenarios: Scenario[];
   meta: Meta;
   progress: ProgressMap;
-  scenarioCount: number;
 }) {
   const [worlds, setWorlds] = useState(initialWorlds);
-  const nav = useRouter();
-
-  useEffect(() => {
-    setWorlds(initialWorlds);
-  }, [initialWorlds]);
-
-  // 仅剩一个世界时进详情
-  useEffect(() => {
-    if (worlds.length === 1) {
-      nav.replace(`/observe/${worlds[0].target_id}`);
-    }
-  }, [worlds, nav]);
+  const progress = useLiveProgress(initialProgress);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -40,65 +42,75 @@ export function ObserveBoard({
         .listWorlds()
         .then(setWorlds)
         .catch(() => {});
-    }, 2500);
+    }, 3000);
     return () => clearInterval(timer);
   }, []);
 
-  if (worlds.length === 0) {
-    return (
-      <Shell active="observe" meta={meta} progress={progress} scenarioCount={scenarioCount}>
-        <main className="max-w-xl mx-auto px-6 py-20 text-center">
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">观测</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">暂无记录</h1>
-          <p className="text-slate-500 text-sm mt-3 leading-relaxed">
-            请先在靶场中打开产品。助手的调用记录与外发将显示于此，服务重启后仍会保留。
-          </p>
-          <Link
-            href="/"
-            className="inline-flex mt-6 items-center gap-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[13px] px-3 py-1.5"
-          >
-            进入靶场
-          </Link>
-        </main>
-      </Shell>
-    );
-  }
+  const firstTier = (id: string) =>
+    Math.min(...scenarios.filter((s) => s.target === id).map((s) => tierRank(s.tier)), 99);
+  const ordered = [...targets].sort((a, b) => firstTier(a.id) - firstTier(b.id));
 
   return (
-    <Shell active="observe" meta={meta} progress={progress} scenarioCount={scenarioCount}>
-      <main className="max-w-3xl mx-auto px-6 py-12">
-        <div className="mb-8">
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">观测</div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">观测</h1>
-          <p className="text-slate-500 text-sm mt-2 leading-relaxed">以下为已打开的产品。</p>
-        </div>
-        <div className="space-y-3">
-          {worlds.map((w) => {
-            const product = productOf(w.target_id);
+    <Shell active="observe" meta={meta} progress={initialProgress} scenarioCount={scenarios.length}>
+      <main className="mx-auto max-w-[1200px] px-4 sm:px-6 py-8 sm:py-10">
+        <PageHeader
+          eyebrow="观测"
+          title="观测与复盘"
+          description="助手的每一次工具调用、发往站外的内容和防护拦截都记录在这里，服务重启后仍会保留。做题时也可以在工作台右侧直接打开观测。"
+        />
+        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))]">
+          {ordered.map((t) => {
+            const product = productOf(t.id);
+            const w = worlds.find((x) => x.target_id === t.id);
+            const related = scenarios
+              .filter((s) => s.target === t.id)
+              .sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
             return (
-              <Link
-                href={`/observe/${w.target_id}`}
-                key={w.target_id}
-                className="w-full p-card p-4 text-left hover:border-slate-300 hover:shadow-product transition-all group flex items-center gap-3"
-              >
-                <div
-                  className={`h-10 w-10 rounded-xl bg-linear-to-br ${product.mark} text-white flex items-center justify-center shadow-product shrink-0`}
-                >
-                  <Icon name={product.icon} size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-slate-900 text-[14px]">{product.brand}</div>
-                  <div className="text-[12px] text-slate-400 mt-0.5">
-                    记录 {w.event_count} · 外发 {w.sink_count}
-                    {w.enabled_defenses.length ? ` · 已启用 ${w.enabled_defenses.length} 项防护` : ""}
+              <div key={t.id} className="card p-5 flex flex-col">
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`h-10 w-10 rounded-xl bg-linear-to-br ${product.mark} text-white flex items-center justify-center shrink-0`}
+                  >
+                    <Icon name={product.icon} size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-semibold text-ink">{product.brand}</div>
+                    <div className="text-[12px] text-muted mt-0.5">{product.tagline}</div>
                   </div>
+                  {w?.run_status && w.run_status !== "idle" && <Tag tone="info">运行中</Tag>}
                 </div>
-                <Icon
-                  name="arrow-right"
-                  size={16}
-                  className="text-slate-300 group-hover:text-slate-700 transition-colors"
-                />
-              </Link>
+                {w ? (
+                  <div className="mt-4 grid grid-cols-3 gap-3 rounded-lg bg-sunken/60 px-4 py-3">
+                    <Metric label="记录" value={w.event_count} />
+                    <Metric label="外发" value={w.sink_count} tone="text-danger" />
+                    <Metric label="防护" value={w.enabled_defenses.length} tone="text-ok" />
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-lg border border-dashed border-line px-4 py-3 text-[12px] text-muted">
+                    还没有打开过这个产品
+                  </div>
+                )}
+                <ul className="mt-4 space-y-1.5 flex-1">
+                  {related.map((s) => (
+                    <li key={s.id} className="flex items-center gap-2 text-[13px]">
+                      <TierBadge tier={s.tier} size="sm" />
+                      <span className={`truncate ${progress[s.id] ? "text-ok" : "text-ink-2"}`}>{s.title}</span>
+                      {progress[s.id] && <Icon name="check" size={13} className="text-ok shrink-0" />}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 pt-4 border-t border-line flex flex-wrap gap-2">
+                  {w ? (
+                    <Link href={observeUrl(t.id)} className="btn-primary btn-sm">
+                      <Icon name="activity" size={13} />
+                      查看记录
+                    </Link>
+                  ) : null}
+                  <Link href={rangeUrl(t.id)} className={w ? "btn-ghost btn-sm" : "btn btn-sm"}>
+                    进入产品
+                  </Link>
+                </div>
+              </div>
             );
           })}
         </div>

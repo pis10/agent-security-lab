@@ -1,13 +1,6 @@
-import { requirePageUser } from "@/lib/auth.ts";
-import { catalogData } from "@/lib/page-data.ts";
-import { Academy } from "@/ui/Academy";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export const metadata = { title: "ASL · 教学" };
-
-export default async function Page() {
-  const user = await requirePageUser("/learn");
-  const { scenarios, progress, meta } = catalogData(user);
-  return <Academy scenarios={scenarios} progress={progress} meta={meta} />;
+/**学习路径已并入首页。 */
+export default function Page() {
+  redirect("/");
 }

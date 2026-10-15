@@ -1,4 +1,7 @@
+import { errorCategory } from "../core/llm.ts";
 import type { TraceEvent } from "../lib/contracts.ts";
+
+export { errorCategory };
 
 export type Outcome = "passed" | "blocked" | "model_declined" | "not_demonstrated" | "error" | "timeout";
 export interface Evidence {
@@ -28,16 +31,6 @@ export function classify(e: Evidence): Outcome {
 }
 
 /**只输出固定分类，不保存服务端原文（可能回显请求头、凭据或模型内容）。 */
-export function errorCategory(message: string): string {
-  if (/malformed token|invalid signature|invalid_token|signature verification/i.test(message)) return "invalid_token";
-  if (/context.{0,30}(length|window|limit)|maximum.{0,20}tokens|too many tokens/i.test(message)) return "context_limit";
-  if (/auto.tool.choice|tool.{0,20}parser|tool.choice|enable.auto.tool/i.test(message)) return "tool_calling_config";
-  if (/401|403|unauthorized|api.?key|authentication/i.test(message)) return "authentication";
-  if (/429|rate.limit/i.test(message)) return "rate_limit";
-  if (/timed? ?out|timeout|超时/i.test(message)) return "timeout";
-  if (/fetch failed|ECONN|ENOTFOUND|网络|连接|服务不可用/i.test(message)) return "connection";
-  return "other";
-}
 
 export interface Failure {
   stage: "setup" | "model" | "tool";

@@ -1,8 +1,8 @@
 /**靶场 Agent：Pi Agent 循环 + 轨迹映射。 */
 import { Agent, type AgentMessage, type AgentTool, type AgentToolResult } from "@earendil-works/pi-agent-core";
-import { contentText, type Model, type ModelThinkingLevel } from "@earendil-works/pi-ai";
+import { contentText, type Model } from "@earendil-works/pi-ai";
 import type { ChatMessage } from "../lib/contracts.ts";
-import { getPiModels, requireLlm } from "./pi-runtime.ts";
+import { getPiModels, llmRequestOptions, llmThinking, requireLlm } from "./llm.ts";
 import type { Tracer } from "./trace.ts";
 
 export const MAX_AGENT_TURNS = 10;
@@ -146,28 +146,32 @@ export function attachTracer(agent: Agent, tracer: Tracer): () => void {
   });
 }
 
+/**模型与思考级别取当前设置；Key 与温度在每次请求时现取。 */
 export async function createLabAgent(opts: {
   systemPrompt: string;
   tools: AgentTool[];
-  thinkingLevel: ModelThinkingLevel;
-  temperature: number;
   messages?: AgentMessage[];
 }): Promise<Agent> {
   const model = await requireLlm();
-  const models = getPiModels();
   return new Agent({
     initialState: {
       systemPrompt: opts.systemPrompt,
       model,
-      thinkingLevel: opts.thinkingLevel,
+      thinkingLevel: llmThinking(),
       tools: opts.tools,
       messages: opts.messages,
     },
-    streamFn: (m, context, options) => models.streamSimple(m, context, { ...options, temperature: opts.temperature }),
+    streamFn: (m, context, options) => getPiModels().streamSimple(m, context, { ...options, ...llmRequestOptions() }),
     toolExecution: "sequential",
     finishTurn: ({ message, newMessages }) => {
       if (message.stopReason === "error" || message.stopReason === "aborted") return;
       if (assistantTurnsIn(newMessages) >= MAX_AGENT_TURNS) return { action: "end" };
     },
   });
+}
+
+/**管理员改了模型设置后，已有对话在下一轮切到新模型，历史保留。 */
+export async function syncAgentModel(agent: Agent): Promise<void> {
+  agent.state.model = await requireLlm();
+  agent.state.thinkingLevel = llmThinking();
 }

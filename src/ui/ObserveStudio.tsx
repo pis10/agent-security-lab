@@ -1,72 +1,82 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { api } from "./api";
-import { productOf, rangeUrl } from "./catalog";
+import { tierRank } from "../scenarios/types.ts";
+import { ApiError, api, errorText } from "./api";
+import { observeUrl, productOf, rangeUrl } from "./catalog";
+import { Tag, TierBadge } from "./components/Badge";
 import { DefenseToggles } from "./components/DefenseToggles";
 import { EventTimeline } from "./components/EventTimeline";
 import { Icon } from "./components/Icon";
 import { Shell } from "./components/Shell";
 import { SinkInbox } from "./components/SinkInbox";
-import type { Meta, Observation, ProgressMap, SinkEvent, TargetInfo, TraceEvent, WorldInfo } from "./types";
+import { useSessionUser } from "./session";
+import {
+  LLM_NOT_CONFIGURED,
+  type Meta,
+  type Observation,
+  type ProgressMap,
+  type Scenario,
+  type SinkEvent,
+  type TargetInfo,
+  type TraceEvent,
+} from "./types";
 
 function Stat({
   label,
   value,
   hint,
   icon,
-  tone = "slate",
+  tone,
 }: {
   label: string;
-  value: string | number;
-  hint?: string;
+  value: number;
+  hint: string;
   icon: string;
-  tone?: "slate" | "red" | "emerald" | "amber";
+  tone?: string;
 }) {
-  const valueCls = {
-    slate: "text-slate-900",
-    red: "text-red-600",
-    emerald: "text-emerald-700",
-    amber: "text-amber-700",
-  }[tone];
   return (
-    <div className="p-card p-4">
-      <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
+    <div className="card px-4 py-3.5">
+      <div className="flex items-center gap-1.5 text-[12px] text-muted">
         <Icon name={icon} size={13} />
         {label}
       </div>
-      <div className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${valueCls}`}>{value}</div>
-      {hint && <div className="text-[12px] text-slate-400 mt-1">{hint}</div>}
+      <div
+        className={`mt-1 text-[24px] font-semibold tracking-tight tabular-nums ${value > 0 && tone ? tone : "text-ink"}`}
+      >
+        {value}
+      </div>
+      <div className="text-[12px] text-muted mt-0.5">{hint}</div>
     </div>
   );
 }
 
+/**单个产品的观测与复盘：时间线、外发箱、防护开关和本产品各关的通关情况。 */
 export function ObserveStudio({
-  targetId,
   target,
+  targets,
+  scenarios,
   meta,
   progress,
-  scenarioCount,
 }: {
-  targetId: string;
   target: TargetInfo;
+  targets: TargetInfo[];
+  scenarios: Scenario[];
   meta: Meta;
   progress: ProgressMap;
-  scenarioCount: number;
 }) {
-  const nav = useRouter();
+  const targetId = target.id;
   const product = productOf(targetId);
+  const user = useSessionUser();
 
-  const [worlds, setWorlds] = useState<WorldInfo[]>([]);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; code: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [trace, setTrace] = useState<TraceEvent[]>([]);
   const [sink, setSink] = useState<SinkEvent[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [defenses, setDefenses] = useState<Set<string>>(new Set());
-
-  const productUrl = rangeUrl(targetId);
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,10 +90,7 @@ export function ObserveStudio({
         setReady(true);
       })
       .catch((e) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
-          setReady(true);
-        }
+        if (!cancelled) setError({ message: errorText(e), code: e instanceof ApiError ? e.code : "" });
       });
     return () => {
       cancelled = true;
@@ -91,7 +98,7 @@ export function ObserveStudio({
   }, [targetId]);
 
   useEffect(() => {
-    if (!ready || error) return;
+    if (!ready) return;
     const tick = () => {
       if (document.hidden) return;
       api
@@ -108,40 +115,34 @@ export function ObserveStudio({
         .catch(() => {});
       api
         .listWorlds()
-        .then(setWorlds)
+        .then((list) => setRunning((list.find((w) => w.target_id === targetId)?.run_status ?? "idle") !== "idle"))
         .catch(() => {});
     };
     tick();
     const timer = setInterval(tick, 2000);
     return () => clearInterval(timer);
-  }, [ready, error, targetId]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "`") {
-        e.preventDefault();
-        nav.push(productUrl);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [nav, productUrl]);
+  }, [ready, targetId]);
 
   const toolCalls = useMemo(() => trace.filter((e) => e.kind === "tool_call").length, [trace]);
   const blocked = useMemo(() => trace.filter((e) => e.kind === "policy_blocked").length, [trace]);
-  const passedHere = observations.filter((o) => o.passed);
-  const liveTargets = worlds.map((w) => w.target_id);
+  const related = scenarios.filter((s) => s.target === targetId).sort((a, b) => tierRank(a.tier) - tierRank(b.tier));
+  const firstTier = (id: string) =>
+    Math.min(...scenarios.filter((s) => s.target === id).map((s) => tierRank(s.tier)), 99);
 
   const toggleDefense = (id: string) => {
+    const prev = defenses;
     const next = new Set(defenses);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setDefenses(next);
-    api.setDefenses(targetId, [...next]).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    api.setDefenses(targetId, [...next]).catch((e) => {
+      setDefenses(prev);
+      setNotice(errorText(e));
+    });
   };
 
   const resetWorld = () => {
-    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发将被清除，通关进度仅清除当前课程。`)) return;
+    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发将被清除，通关进度仅清除当前关卡。`)) return;
     api
       .resetWorld(targetId, null)
       .then((w) => {
@@ -149,149 +150,176 @@ export function ObserveStudio({
         setTrace([]);
         setSink([]);
         setObservations([]);
-        setError(null);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setNotice(errorText(e)));
   };
 
   return (
-    <Shell active="observe" meta={meta} progress={progress} scenarioCount={scenarioCount}>
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <div className="flex items-center gap-2 text-[12px] text-slate-400 mb-4">
-          <Link href="/observe" className="hover:text-slate-700">
-            观测
+    <Shell active="observe" meta={meta} progress={progress} scenarioCount={scenarios.length}>
+      <main className="mx-auto max-w-[1440px] px-4 sm:px-6 py-6 sm:py-8">
+        <nav aria-label="切换产品" className="flex flex-wrap items-center gap-1.5 mb-5">
+          <Link href="/observe" className="btn-ghost btn-sm">
+            <Icon name="arrow-left" size={13} />
+            总览
           </Link>
-          <Icon name="chevron-right" size={12} />
-          <span className="text-slate-600">{product.brand}</span>
-        </div>
-
-        {liveTargets.length > 1 && (
-          <div className="flex flex-wrap gap-1.5 mb-5">
-            {liveTargets.map((id) => {
-              const p = productOf(id);
-              const on = id === targetId;
+          <span className="h-5 w-px bg-line mx-1" aria-hidden />
+          {[...targets]
+            .sort((a, b) => firstTier(a.id) - firstTier(b.id))
+            .map((t) => {
+              const p = productOf(t.id);
+              const on = t.id === targetId;
               return (
                 <Link
-                  key={id}
-                  href={`/observe/${id}`}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] border transition-colors ${
-                    on
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900"
+                  key={t.id}
+                  href={observeUrl(t.id)}
+                  aria-current={on ? "page" : undefined}
+                  className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-[13px] border transition-colors ${
+                    on ? "bg-ink text-white border-ink" : "bg-surface text-ink-2 border-line hover:border-line-strong"
                   }`}
                 >
-                  <Icon name={p.icon} size={12} />
+                  <Icon name={p.icon} size={13} />
                   {p.brand}
                 </Link>
               );
             })}
-          </div>
-        )}
+        </nav>
 
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div className="flex items-start gap-3 min-w-0">
-            <div
-              className={`h-11 w-11 rounded-xl bg-linear-to-br ${product.mark} text-white flex items-center justify-center shadow-product shrink-0`}
+            <span
+              className={`h-11 w-11 rounded-xl bg-linear-to-br ${product.mark} text-white flex items-center justify-center shrink-0`}
             >
               <Icon name={product.icon} size={20} />
-            </div>
+            </span>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-slate-900">{product.brand}</h1>
-              <div className="text-[12px] text-slate-400 mt-0.5">
-                {defenses.size ? `已启用 ${defenses.size} 项防护` : "调用记录"}
-              </div>
+              <h1 className="text-[22px] font-semibold tracking-tight text-ink flex items-center gap-2">
+                {product.brand}
+                {running && <Tag tone="info">助手处理中</Tag>}
+              </h1>
+              <div className="text-[13px] text-muted mt-0.5">{product.tagline} · 观测记录</div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={productUrl}
-              className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[13px] px-3 py-1.5"
-            >
-              <Icon name="arrow-right" size={13} />
+            <Link href={rangeUrl(targetId)} className="btn-primary">
               进入产品
+              <Icon name="arrow-right" size={13} />
             </Link>
-            <button
-              type="button"
-              onClick={resetWorld}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white text-[13px] text-slate-600 px-3 py-1.5 hover:border-slate-300"
-            >
+            <button type="button" onClick={resetWorld} className="btn" disabled={!ready}>
               <Icon name="refresh" size={13} />
               重置
             </button>
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
-            {error}
+        {notice && (
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-danger/25 bg-danger-soft px-4 py-2.5 text-[13px] text-danger"
+          >
+            {notice}
           </div>
         )}
 
-        {!ready ? (
-          <div className="text-slate-400 text-sm py-16 text-center">加载中…</div>
-        ) : (
-          <>
-            {passedHere.length > 0 && (
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] text-slate-400">已通关</span>
-                {passedHere.map((o) => (
-                  <Link
-                    key={o.scenario_id}
-                    href={`/learn/${o.scenario_id}`}
-                    className="chip-light text-emerald-700 border-emerald-200 bg-emerald-50"
-                  >
-                    <Icon name="check" size={10} />
-                    {o.title}
-                  </Link>
-                ))}
-              </div>
+        {error ? (
+          <div className="card p-6 text-center max-w-lg mx-auto">
+            <h2 className="text-[16px] font-semibold text-ink">
+              {error.code === LLM_NOT_CONFIGURED ? "尚未配置模型" : "无法读取记录"}
+            </h2>
+            <p className="mt-1.5 text-[13px] text-ink-2">
+              {error.code === LLM_NOT_CONFIGURED && !user?.is_admin
+                ? "管理员还没有配置模型，请联系管理员。"
+                : error.message}
+            </p>
+            {error.code === LLM_NOT_CONFIGURED && user?.is_admin && (
+              <Link href="/admin/model" className="btn-primary mt-4">
+                去配置模型
+              </Link>
             )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <Stat label="记录" value={trace.length} hint={`${toolCalls} 次工具调用`} icon="activity" />
-              <Stat
-                label="外发"
-                value={sink.length}
-                hint={sink.length ? "存在站外发送" : "暂无外发"}
-                icon="inbox"
-                tone={sink.length ? "red" : "slate"}
-              />
-              <Stat
-                label="拦截"
-                value={blocked}
-                hint={defenses.size ? `已启用 ${defenses.size} 项防护` : "请先开启下方防护后再次尝试"}
-                icon="shield-alert"
-                tone={blocked ? "amber" : "slate"}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
-              <section className="p-card lg:col-span-3 h-[32rem] flex flex-col min-h-0">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <div className="text-[13px] font-medium text-slate-800">时间线</div>
-                  <div className="text-[12px] text-slate-400">对话和工具调用</div>
-                </div>
-                <EventTimeline events={trace} />
-              </section>
-              <section className="p-card lg:col-span-2 h-[32rem] flex flex-col min-h-0">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <div className="text-[13px] font-medium text-slate-800">外发</div>
-                  <div className="text-[12px] text-slate-400">邮件、HTTP、内网</div>
-                </div>
-                <SinkInbox events={sink} />
-              </section>
-            </div>
-
-            <section className="p-card p-4">
-              <div className="text-[13px] font-medium text-slate-800 mb-1">防护</div>
-              <p className="text-[12px] text-slate-400 mb-3 leading-relaxed max-w-xl">
-                开关立即生效，不会清除产品数据。复测时请开启防护，返回产品清空对话后再次尝试，通关记录仍会保留。
-              </p>
-              <div className="max-w-xl">
-                <DefenseToggles defenses={target.defenses} selected={defenses} onToggle={toggleDefense} />
+          </div>
+        ) : !ready ? (
+          <div className="text-muted text-[13px] py-20 text-center">加载中…</div>
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Stat label="记录" value={trace.length} hint={`其中工具调用 ${toolCalls} 次`} icon="activity" />
+                <Stat
+                  label="外发"
+                  value={sink.length}
+                  hint={sink.length ? "存在发往站外的内容" : "暂无外发"}
+                  icon="send"
+                  tone="text-danger"
+                />
+                <Stat
+                  label="拦截"
+                  value={blocked}
+                  hint={defenses.size ? `已开启 ${defenses.size} 项防护` : "防护未开启"}
+                  icon="shield-alert"
+                  tone="text-warn"
+                />
               </div>
-            </section>
-          </>
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                <section className="card h-[36rem] flex flex-col min-h-0 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                    <h2 className="text-[14px] font-semibold text-ink">时间线</h2>
+                    <span className="text-[12px] text-muted">对话、工具调用与拦截</span>
+                  </div>
+                  <EventTimeline events={trace} />
+                </section>
+                <section className="card h-[36rem] flex flex-col min-h-0 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                    <h2 className="text-[14px] font-semibold text-ink">外发箱</h2>
+                    <span className="text-[12px] text-muted">邮件、HTTP、内网</span>
+                  </div>
+                  <SinkInbox events={sink} />
+                </section>
+              </div>
+            </div>
+
+            <aside className="space-y-5">
+              <section className="card p-4">
+                <h2 className="text-[14px] font-semibold text-ink">防护</h2>
+                <p className="text-[12px] text-muted mt-1 mb-3 leading-relaxed">
+                  开关立即生效，不清除产品数据。复测时开启防护，回到产品清空对话后再试一次。
+                </p>
+                <DefenseToggles
+                  defenses={target.defenses}
+                  selected={defenses}
+                  onToggle={toggleDefense}
+                  disabled={running}
+                />
+              </section>
+              <section className="card p-4">
+                <h2 className="text-[14px] font-semibold text-ink mb-3">本产品的关卡</h2>
+                <ul className="space-y-2.5">
+                  {related.map((s) => {
+                    const obs = observations.find((o) => o.scenario_id === s.id);
+                    const done = !!progress[s.id] || obs?.passed;
+                    return (
+                      <li key={s.id}>
+                        <Link href={rangeUrl(targetId, s.id)} className="group flex items-start gap-2.5">
+                          <TierBadge tier={s.tier} size="sm" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[13px] text-ink group-hover:underline underline-offset-4">
+                              {s.title}
+                            </span>
+                            <span className="block text-[12px] text-muted mt-0.5">
+                              {done
+                                ? "已通关"
+                                : obs && obs.total > 0
+                                  ? `条件 ${obs.passed_count}/${obs.total}`
+                                  : "未开始"}
+                            </span>
+                          </span>
+                          {done && <Icon name="check" size={14} className="text-ok mt-0.5" />}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            </aside>
+          </div>
         )}
       </main>
     </Shell>

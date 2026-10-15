@@ -2,71 +2,63 @@
 import type { DefenseInfo } from "../types";
 import { Icon } from "./Icon";
 
+/**防护开关：立即生效，不清除产品数据。 */
 export function DefenseToggles({
   defenses,
   selected,
   onToggle,
-  dirty = false,
-  onApply,
+  disabled = false,
 }: {
   defenses: DefenseInfo[];
   selected: Set<string>;
   onToggle: (id: string) => void;
-  dirty?: boolean;
-  onApply?: () => void;
+  disabled?: boolean;
 }) {
   if (defenses.length === 0)
     return (
-      <div className="flex items-center gap-1.5 text-slate-400 text-xs">
-        <Icon name="shield" size={12} />
+      <div className="flex items-center gap-1.5 text-muted text-[13px]">
+        <Icon name="shield" size={13} />
         本产品暂无可开关的防护
       </div>
     );
   return (
-    <div className="space-y-2">
+    <ul className="space-y-2">
       {defenses.map((d) => {
         const on = selected.has(d.id);
         return (
-          <div key={d.id} className="flex items-start gap-2.5 group" title={d.description}>
+          <li key={d.id}>
             <button
               type="button"
+              role="switch"
+              aria-checked={on}
+              disabled={disabled}
               onClick={() => onToggle(d.id)}
-              className={`mt-0.5 relative w-9 h-5 rounded-full border transition-colors shrink-0 ${
-                on ? "bg-emerald-100 border-emerald-400" : "bg-slate-100 border-slate-300"
+              className={`w-full text-left flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                on ? "border-ok/30 bg-ok-soft/60" : "border-line bg-surface hover:border-line-strong"
               }`}
             >
               <span
-                className={`absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all ${
-                  on ? "left-[18px] bg-emerald-600" : "left-0.5 bg-slate-400"
-                }`}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => onToggle(d.id)}
-              className={`text-left text-[13px] transition-colors ${
-                on ? "text-emerald-700" : "text-slate-700 group-hover:text-slate-900"
-              }`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Icon name={on ? "shield-check" : "shield"} size={13} />
-                {d.name}
+                aria-hidden
+                className={`mt-0.5 relative w-9 h-5 rounded-full shrink-0 transition-colors ${on ? "bg-ok" : "bg-line-strong"}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-raise transition-all ${
+                    on ? "left-[18px]" : "left-0.5"
+                  }`}
+                />
               </span>
-              <span className="block text-[11px] text-slate-400 mt-0.5 leading-snug">{d.description}</span>
+              <span className="min-w-0">
+                <span className={`flex items-center gap-1.5 text-[13px] font-medium ${on ? "text-ok" : "text-ink"}`}>
+                  <Icon name={on ? "shield-check" : "shield"} size={13} />
+                  {d.name}
+                  <span className="text-[11px] font-normal text-muted">{on ? "已开启" : "未开启"}</span>
+                </span>
+                <span className="block text-[12px] text-ink-2 mt-1 leading-relaxed">{d.description}</span>
+              </span>
             </button>
-          </div>
+          </li>
         );
       })}
-      {dirty && onApply && (
-        <button
-          type="button"
-          className="w-full mt-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[13px] py-1.5"
-          onClick={onApply}
-        >
-          <Icon name="refresh" size={13} />
-          应用防护
-        </button>
-      )}
-    </div>
+    </ul>
   );
 }

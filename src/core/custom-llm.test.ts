@@ -1,12 +1,13 @@
-/**自定义模型端到端：本地模拟 OpenAI / Anthropic 协议服务，走 .env → Pi → 工具调用 → 回复的完整循环。 */
+/**自建模型端到端：本地模拟 OpenAI / Anthropic 协议服务，走 网页设置 → Pi → 工具调用 → 回复的完整循环。 */
 import assert from "node:assert/strict";
 import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
 import test, { after, beforeEach } from "node:test";
 import { Type } from "@earendil-works/pi-ai";
-import { loadConfig, resetConfigCache } from "../lib/config.ts";
+import { loadConfig } from "../lib/config.ts";
 import { createLabAgent, lastAssistantText } from "./agent.ts";
-import { resetPiModels } from "./pi-runtime.ts";
+import { type LlmSettings, testLlm } from "./llm.ts";
+import { installTestLlm, TEST_LLM_DEFAULTS } from "./llm-testing.ts";
 import { agentTool, ToolContext } from "./tools.ts";
 import { Tracer } from "./trace.ts";
 
@@ -33,8 +34,15 @@ function openaiChunk(delta: Record<string, unknown>, finish: string | null): Rec
   };
 }
 
-/**首轮返回 get_ticket 调用；带着工具结果的第二轮返回文本。 */
+/**请求里声明的第一个工具及其测试参数。 */
+function firstTool(names: string[]): { name: string; args: string } {
+  const name = names[0] ?? "get_ticket";
+  return { name, args: name === "ping" ? '{"value":42}' : '{"ticket_id":"T-2001"}' };
+}
+
+/**首轮返回对第一个工具的调用；带着工具结果的第二轮返回文本。 */
 function openaiReply(body: Record<string, unknown>): string {
+  const tool = firstTool(((body.tools ?? []) as Array<{ function: { name: string } }>).map((t) => t.function.name));
   const messages = body.messages as Array<{ role: string; content?: unknown }>;
   const toolResult = messages.find((m) => m.role === "tool");
   const usage = {
@@ -59,7 +67,7 @@ function openaiReply(body: Record<string, unknown>): string {
                 index: 0,
                 id: "call_1",
                 type: "function",
-                function: { name: "get_ticket", arguments: '{"ticket_id":"T-2001"}' },
+                function: { name: tool.name, arguments: tool.args },
               },
             ],
           },
@@ -71,6 +79,7 @@ function openaiReply(body: Record<string, unknown>): string {
 }
 
 function anthropicReply(body: Record<string, unknown>): string {
+  const tool = firstTool(((body.tools ?? []) as Array<{ name: string }>).map((t) => t.name));
   const messages = body.messages as Array<{ content: unknown }>;
   const result = messages
     .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
@@ -109,7 +118,7 @@ function anthropicReply(body: Record<string, unknown>): string {
           {
             type: "content_block_start",
             index: 0,
-            content_block: { type: "tool_use", id: "toolu_1", name: "get_ticket", input: {} },
+            content_block: { type: "tool_use", id: "toolu_1", name: tool.name, input: {} },
           },
         ],
         [
@@ -117,7 +126,7 @@ function anthropicReply(body: Record<string, unknown>): string {
           {
             type: "content_block_delta",
             index: 0,
-            delta: { type: "input_json_delta", partial_json: '{"ticket_id":"T-2001"}' },
+            delta: { type: "input_json_delta", partial_json: tool.args },
           },
         ],
       ];
@@ -148,6 +157,11 @@ const server = createServer((req, res) => {
     const url = req.url ?? "";
     const pathname = new URL(url, "http://mock").pathname;
     seen.push({ path: pathname, url, headers: req.headers, body });
+    if (req.headers.authorization === "Bearer bad-key-1234") {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { message: "Incorrect API key provided: bad-key-1234" } }));
+      return;
+    }
     const payload =
       pathname === "/v1/chat/completions"
         ? openaiReply(body)
@@ -165,25 +179,24 @@ await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 after(() => server.close());
 
-const ENV_KEYS = [
-  "ASL_LLM_BASE_URL",
-  "ASL_LLM_API",
-  "ASL_LLM_MODEL",
-  "ASL_LLM_API_KEY",
-  "ASL_LLM_COMPAT",
-  "ASL_LLM_PROVIDER",
-];
-
 beforeEach(() => {
   seen.length = 0;
-  for (const k of ENV_KEYS) delete process.env[k];
 });
 
-/**按当前 .env 建靶场 Agent，跑一轮「查工单」。 */
-async function runTicketTurn(env: Record<string, string>): Promise<{ args: unknown; reply: string }> {
-  Object.assign(process.env, env);
-  resetConfigCache();
-  resetPiModels();
+function customLlm(overrides: Partial<LlmSettings>): LlmSettings {
+  return {
+    ...TEST_LLM_DEFAULTS,
+    kind: "openai-completions",
+    provider: "custom",
+    model: "my-model",
+    base_url: `${origin}/v1`,
+    ...overrides,
+  };
+}
+
+/**按当前模型设置建靶场 Agent，跑一轮「查工单」。 */
+async function runTicketTurn(settings: LlmSettings): Promise<{ args: unknown; reply: string }> {
+  installTestLlm(settings);
   const ctx = new ToolContext("s", new Tracer(), loadConfig());
   let args: unknown = null;
   const tool = agentTool(ctx, {
@@ -195,22 +208,13 @@ async function runTicketTurn(env: Record<string, string>): Promise<{ args: unkno
       return '{"id":"T-2001","tenant":"tenant_b"}';
     },
   });
-  const agent = await createLabAgent({
-    systemPrompt: "你是客服助手。",
-    tools: [tool],
-    thinkingLevel: "off",
-    temperature: 0.3,
-  });
+  const agent = await createLabAgent({ systemPrompt: "你是客服助手。", tools: [tool] });
   await agent.prompt("帮我查询工单 T-2001");
   return { args, reply: lastAssistantText(agent.state.messages) };
 }
 
 test("OpenAI 协议：baseUrl 含 /v1，Bearer Key，工具调用往返", async () => {
-  const { args, reply } = await runTicketTurn({
-    ASL_LLM_BASE_URL: `${origin}/v1`,
-    ASL_LLM_MODEL: "my-model",
-    ASL_LLM_API_KEY: "test-key",
-  });
+  const { args, reply } = await runTicketTurn(customLlm({ api_key: "test-key" }));
   assert.deepEqual(args, { ticket_id: "T-2001" });
   assert.match(reply, /tenant_b/);
   assert.deepEqual(
@@ -226,27 +230,26 @@ test("OpenAI 协议：baseUrl 含 /v1，Bearer Key，工具调用往返", async 
   assert.ok("max_completion_tokens" in first.body);
 });
 
-test("OpenAI 协议：ASL_LLM_COMPAT 交给 Pi 调整请求字段；不填 Key 发占位值", async () => {
-  const { reply } = await runTicketTurn({
-    ASL_LLM_BASE_URL: `${origin}/v1`,
-    ASL_LLM_MODEL: "my-model",
-    ASL_LLM_COMPAT: '{"supportsStore":false,"maxTokensField":"max_tokens"}',
-  });
+test("OpenAI 协议：兼容开关交给 Pi 调整请求字段；额外请求头原样发送；不填 Key 发占位值", async () => {
+  const { reply } = await runTicketTurn(
+    customLlm({
+      compat: { supportsStore: false, maxTokensField: "max_tokens" },
+      headers: { "X-Gateway-Tenant": "lab" },
+    }),
+  );
   assert.match(reply, /tenant_b/);
   const first = seen[0];
   assert.equal(first.headers.authorization, "Bearer EMPTY");
+  assert.equal(first.headers["x-gateway-tenant"], "lab");
   assert.ok(!("store" in first.body));
   assert.ok("max_tokens" in first.body);
   assert.ok(!("max_completion_tokens" in first.body));
 });
 
 test("Anthropic 协议：baseUrl 不含 /v1，x-api-key，工具调用往返", async () => {
-  const { args, reply } = await runTicketTurn({
-    ASL_LLM_BASE_URL: origin,
-    ASL_LLM_API: "anthropic-messages",
-    ASL_LLM_MODEL: "my-model",
-    ASL_LLM_API_KEY: "test-key",
-  });
+  const { args, reply } = await runTicketTurn(
+    customLlm({ kind: "anthropic-messages", base_url: origin, api_key: "test-key" }),
+  );
   assert.deepEqual(args, { ticket_id: "T-2001" });
   assert.match(reply, /tenant_b/);
   assert.deepEqual(
@@ -258,4 +261,29 @@ test("Anthropic 协议：baseUrl 不含 /v1，x-api-key，工具调用往返", a
   assert.equal(first.headers["x-api-key"], "test-key");
   assert.equal(first.body.model, "my-model");
   assert.equal((first.body.tools as Array<{ name: string }>)[0].name, "get_ticket");
+});
+
+test("测试连接：工具调用往返成功；不保存设置，也不影响当前模型", async () => {
+  installTestLlm(null);
+  for (const settings of [
+    customLlm({ api_key: "test-key" }),
+    customLlm({ kind: "anthropic-messages", base_url: origin, api_key: "test-key" }),
+  ]) {
+    const result = await testLlm(settings);
+    assert.equal(result.ok, true, JSON.stringify(result.error));
+    assert.equal(result.tool_call, true);
+    assert.equal(result.model, "custom/my-model");
+    assert.equal(result.error, null);
+  }
+  assert.equal((seen[0].body.tools as Array<{ function: { name: string } }>)[0].function.name, "ping");
+});
+
+test("测试连接：Key 错误归为 authentication，错误信息里不回显 Key；连不上归为 connection", async () => {
+  const denied = await testLlm(customLlm({ api_key: "bad-key-1234" }));
+  assert.equal(denied.ok, false);
+  assert.equal(denied.error?.category, "authentication");
+  assert.doesNotMatch(denied.error?.message ?? "", /bad-key-1234/);
+  const down = await testLlm(customLlm({ base_url: "http://127.0.0.1:9/v1" }), 5_000);
+  assert.equal(down.ok, false);
+  assert.equal(down.error?.category, "connection", down.error?.message);
 });

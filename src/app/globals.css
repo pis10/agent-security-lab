@@ -1,26 +1,57 @@
 @import "tailwindcss";
 
-/* ── 主题（Tailwind v4 CSS-first，替代原 tailwind.config.js）── */
+/* ── 主题（Tailwind v4 CSS-first）──
+ * 靶场外壳统一浅色：纸色底、白色卡片、墨色正文，品牌朱红只用在标识与攻击相关的强调上。
+ * 仿真产品（sims/）保留各自的产品配色，靶场外壳不去覆盖它们。 */
 @theme {
-  /* 深色控制台（红队作战室） */
+  /* 底色与表面 */
+  --color-paper: #f6f5f1;
+  --color-surface: #ffffff;
+  --color-sunken: #efede7;
+  --color-line: #e3e0d8;
+  --color-line-strong: #cbc7bc;
+
+  /* 文字 */
+  --color-ink: #1b1a17;
+  --color-ink-2: #45433e;
+  --color-muted: #6b6860;
+
+  /* 品牌与状态（每种都配一个浅底） */
+  --color-brand: #d2381c;
+  --color-brand-soft: #fbeae5;
+  --color-ok: #17784a;
+  --color-ok-soft: #e4f3ea;
+  --color-warn: #96580a;
+  --color-warn-soft: #fbf0dc;
+  --color-info: #1d5cc0;
+  --color-info-soft: #e6eefb;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+
+  /* 关卡色：L1–L5，深浅一致、色相不同 */
+  --color-tier-1: #1d5cc0;
+  --color-tier-2: #17784a;
+  --color-tier-3: #96580a;
+  --color-tier-4: #b42318;
+  --color-tier-5: #6b3fb8;
+
+  /* 仿真产品里的终端与占位聊天仍用深色 */
   --color-base: #0a0d13;
   --color-panel: #10151d;
   --color-elevated: #18202b;
   --color-edge: #222c3a;
   --color-dim: #8d99ab;
   --color-accent: #ff5252;
-  --color-ok: #3fb950;
-  --color-warn: #e3b341;
-  --color-info: #58a6ff;
-  --color-violet: #bc8cff;
 
   --font-sans:
-    "Inter", "-apple-system", "BlinkMacSystemFont", "PingFang SC", "Helvetica Neue", "Segoe UI", "Microsoft YaHei",
-    "sans-serif";
+    "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "-apple-system",
+    "BlinkMacSystemFont", "Segoe UI", "Helvetica Neue", "sans-serif";
   --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", "monospace";
 
+  --radius-card: 10px;
   --shadow-product: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.08);
-  --shadow-pop: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 12px 32px rgba(27, 26, 23, 0.16), 0 2px 6px rgba(27, 26, 23, 0.08);
+  --shadow-raise: 0 1px 2px rgba(27, 26, 23, 0.05);
 }
 
 :root {
@@ -28,36 +59,55 @@
 }
 
 body {
-  @apply bg-slate-100 text-slate-800 antialiased;
+  @apply bg-paper text-ink antialiased;
 }
 
 ::selection {
-  background: rgba(255, 82, 82, 0.28);
+  background: rgba(210, 56, 28, 0.18);
 }
 
-/* @utility 才能被其他规则 @apply（v4 不再支持 @apply 组件层自定义类） */
-@utility panel {
-  @apply bg-panel border border-edge rounded-lg;
+/* ── 靶场外壳组件 ── */
+
+@utility card {
+  @apply bg-surface border border-line rounded-card shadow-raise;
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-edge bg-elevated text-sm text-slate-200 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  @apply inline-flex items-center justify-center gap-1.5 h-9 px-3.5 rounded-lg border border-line bg-surface text-[13px] font-medium text-ink whitespace-nowrap transition-colors hover:border-line-strong hover:bg-sunken focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-info disabled:opacity-45 disabled:cursor-not-allowed;
 }
 
 @utility btn-primary {
-  @apply btn border-accent/50 text-accent hover:bg-accent/10 hover:border-accent;
+  @apply btn bg-ink border-ink text-white hover:bg-ink-2 hover:border-ink-2;
 }
 
-@utility chip {
-  @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono border border-edge text-dim;
+@utility btn-ghost {
+  @apply btn border-transparent bg-transparent text-ink-2 hover:bg-sunken hover:border-transparent;
 }
 
-@utility chip-light {
-  @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] font-mono border border-slate-200 text-slate-500 bg-white;
+@utility btn-sm {
+  @apply h-8 px-2.5 text-[12px] rounded-md;
 }
 
+@utility field {
+  @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-ink placeholder:text-muted/70 focus:outline-none focus:border-ink-2 focus:ring-2 focus:ring-ink/10 disabled:bg-sunken disabled:text-muted;
+}
+
+@utility tag {
+  @apply inline-flex items-center gap-1 h-6 px-2 rounded-md border border-line bg-surface text-[12px] text-ink-2 whitespace-nowrap;
+}
+
+@utility eyebrow {
+  @apply text-[12px] font-medium text-muted tracking-wide;
+}
+
+/* 仿真产品里的卡片 */
 @utility p-card {
   @apply bg-white border border-slate-200 rounded-lg shadow-product;
+}
+
+/* 仿真产品里的深色控制台按钮（占位聊天） */
+@utility btn-console {
+  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md border border-accent/50 bg-elevated text-sm text-accent hover:bg-accent/10 hover:border-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
 }
 
 @keyframes blink {
@@ -87,6 +137,56 @@ body {
   animation: rise-in 0.25s ease-out both;
 }
 
+/* 助手处理中：顶栏下方的细进度条 */
+@keyframes run-stripe {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.run-stripe {
+  animation: run-stripe 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.drawer-in {
+  animation: drawer-in 0.18s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .run-stripe,
+  .pulse-dot,
+  .drawer-in,
+  .cursor-blink {
+    animation: none;
+  }
+}
+
 .console-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -107,11 +207,11 @@ body {
   height: 8px;
 }
 .product-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d6d3cb;
   border-radius: 4px;
 }
 .product-scroll::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #b9b5aa;
 }
 .product-scroll::-webkit-scrollbar-track {
   background: transparent;

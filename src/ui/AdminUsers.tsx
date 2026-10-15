@@ -1,9 +1,9 @@
 "use client";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, errorText } from "./api";
+import { AdminFrame } from "./components/AdminFrame";
+import { Tag } from "./components/Badge";
 import { Icon } from "./components/Icon";
-import { Shell } from "./components/Shell";
 import type { AdminUser, Meta, ProgressMap } from "./types";
 
 type Action = Parameters<typeof api.adminAction>[1];
@@ -53,10 +53,9 @@ function formatTime(ts: number | null): string {
 }
 
 function StatusBadge({ user }: { user: AdminUser }) {
-  if (user.disabled) return <span className="chip-light">已停用</span>;
-  if (user.must_change_password)
-    return <span className="chip-light text-amber-700 border-amber-200 bg-amber-50">待改初始密码</span>;
-  return <span className="chip-light text-emerald-700 border-emerald-200 bg-emerald-50">正常</span>;
+  if (user.disabled) return <Tag>已停用</Tag>;
+  if (user.must_change_password) return <Tag tone="warn">待改初始密码</Tag>;
+  return <Tag tone="ok">正常</Tag>;
 }
 
 function IssuedPanel({ issued, onClose }: { issued: { title: string; rows: Issued[] }; onClose: () => void }) {
@@ -67,34 +66,30 @@ function IssuedPanel({ issued, onClose }: { issued: { title: string; rows: Issue
     void copyText([`靶场地址：${loginUrl}`, "用户名\t显示名\t初始密码", ...lines].join("\n")).then(setCopied);
   };
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-5">
+    <div className="card border-warn/30 bg-warn-soft p-4 mb-5" role="status">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-[13px] font-semibold text-amber-900">{issued.title}</div>
-          <div className="text-[12px] text-amber-800 mt-0.5 leading-relaxed">
+          <div className="text-[14px] font-semibold text-ink">{issued.title}</div>
+          <div className="text-[12px] text-warn mt-0.5 leading-relaxed">
             初始密码只显示这一次，请转交本人；本人首次登录后须修改。
           </div>
         </div>
-        <button type="button" onClick={onClose} className="text-amber-700 hover:text-amber-900" title="关闭">
+        <button type="button" onClick={onClose} className="btn-ghost btn-sm px-1.5" aria-label="关闭">
           <Icon name="x" size={14} />
         </button>
       </div>
       <table className="mt-3 w-full text-[12px]">
         <tbody>
           {issued.rows.map((r) => (
-            <tr key={r.username} className="border-t border-amber-200/70">
-              <td className="py-1.5 pr-3 font-mono text-amber-900">{r.username}</td>
-              <td className="py-1.5 pr-3 text-amber-800">{r.display_name}</td>
-              <td className="py-1.5 font-mono text-amber-900 select-all">{r.password}</td>
+            <tr key={r.username} className="border-t border-warn/20">
+              <td className="py-1.5 pr-3 font-mono text-ink">{r.username}</td>
+              <td className="py-1.5 pr-3 text-ink-2">{r.display_name}</td>
+              <td className="py-1.5 font-mono text-ink select-all">{r.password}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <button
-        type="button"
-        onClick={copyAll}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-[12px] text-amber-900 hover:border-amber-400"
-      >
+      <button type="button" onClick={copyAll} className="btn btn-sm mt-3">
         <Icon name={copied ? "check" : "file-text"} size={12} />
         {copied ? "已复制" : "复制登录地址与账号密码"}
       </button>
@@ -185,185 +180,170 @@ export function AdminUsers({
 
   const adminCount = users?.filter((u) => u.is_admin && !u.disabled).length ?? 0;
   const lineCount = parseLines(batch).length;
-  const linkBtn = "text-slate-500 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed";
-  const dangerBtn = "text-slate-500 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed";
+  const linkBtn = "text-ink-2 hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed";
+  const dangerBtn = "text-ink-2 hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed";
 
   return (
-    <Shell meta={meta} progress={progress} scenarioCount={scenarioCount}>
-      <main className="max-w-5xl mx-auto px-6 py-12">
-        <div className="mb-8">
-          <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">管理</div>
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 mt-1">账号管理</h1>
-            <Link
-              href="/admin/progress"
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              教学进度
-            </Link>
-          </div>
-          <p className="text-slate-500 text-sm mt-2 max-w-xl leading-relaxed">
-            为学员创建账号，并把初始密码转交本人。每个账号的产品数据与通关进度相互独立。
-          </p>
+    <AdminFrame
+      active="users"
+      meta={meta}
+      progress={progress}
+      scenarioCount={scenarioCount}
+      title="账号管理"
+      description="为学员创建账号，并把初始密码转交本人。每个账号的产品数据与通关进度相互独立。"
+    >
+      {issued && <IssuedPanel issued={issued} onClose={() => setIssued(null)} />}
+
+      <section className="card p-5 mb-5">
+        <h2 className="text-[14px] font-semibold text-ink">创建账号</h2>
+        <p className="text-[12px] text-muted mt-1 leading-relaxed">
+          每行一个：用户名 显示名（显示名可省略）。用户名限 2–32 位小写字母、数字或 . _ -；初始密码随机生成。
+        </p>
+        <textarea
+          value={batch}
+          onChange={(e) => setBatch(e.target.value)}
+          rows={4}
+          placeholder={"zhangsan 张三\nlisi 李四"}
+          aria-label="待创建的账号，每行一个"
+          className="field mt-3 font-mono"
+        />
+        {createErrors.length > 0 && (
+          <ul role="alert" className="mt-2 space-y-0.5 text-[12px] text-danger">
+            {createErrors.map((e) => (
+              <li key={e}>{e}</li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <label className="flex items-center gap-1.5 text-[13px] text-ink-2">
+            <input type="checkbox" checked={asAdmin} onChange={(e) => setAsAdmin(e.target.checked)} />
+            设为管理员
+          </label>
+          <button type="button" onClick={create} disabled={creating || lineCount === 0} className="btn-primary">
+            {creating ? "创建中…" : lineCount > 1 ? `创建 ${lineCount} 个账号` : "创建账号"}
+          </button>
         </div>
+      </section>
 
-        {issued && <IssuedPanel issued={issued} onClose={() => setIssued(null)} />}
-
-        <section className="p-card p-5 mb-5">
-          <div className="text-[14px] font-semibold text-slate-900">创建账号</div>
-          <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">
-            每行一个：用户名 显示名（显示名可省略）。用户名限 2–32 位小写字母、数字或 . _ -；初始密码随机生成。
-          </p>
-          <textarea
-            value={batch}
-            onChange={(e) => setBatch(e.target.value)}
-            rows={4}
-            placeholder={"zhangsan 张三\nlisi 李四"}
-            className="mt-3 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-          />
-          {createErrors.length > 0 && (
-            <ul className="mt-2 space-y-0.5 text-[12px] text-red-600">
-              {createErrors.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-3 flex items-center justify-between gap-3">
-            <label className="flex items-center gap-1.5 text-[12px] text-slate-600">
-              <input type="checkbox" checked={asAdmin} onChange={(e) => setAsAdmin(e.target.checked)} />
-              设为管理员
-            </label>
-            <button
-              type="button"
-              onClick={create}
-              disabled={creating || lineCount === 0}
-              className="rounded-md bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] px-3 py-1.5"
-            >
-              {creating ? "创建中…" : lineCount > 1 ? `创建 ${lineCount} 个账号` : "创建账号"}
-            </button>
-          </div>
-        </section>
-
-        <section className="p-card">
-          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-            <div className="text-[14px] font-semibold text-slate-900">全部账号</div>
-            {users && (
-              <div className="text-[12px] text-slate-400">
-                共 {users.length} 个 · 管理员 {adminCount} 个
-              </div>
-            )}
-          </div>
-          {rowError && <div className="px-5 py-2 text-[12px] text-red-600 border-b border-slate-100">{rowError}</div>}
-          {loadError ? (
-            <div className="px-5 py-8 text-center text-[13px] text-red-600">{loadError}</div>
-          ) : users === null ? (
-            <div className="px-5 py-8 text-center text-[13px] text-slate-400">加载中…</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] text-slate-400">
-                    <th className="px-5 py-2 font-medium">账号</th>
-                    <th className="px-3 py-2 font-medium">状态</th>
-                    <th className="px-3 py-2 font-medium">通关</th>
-                    <th className="px-3 py-2 font-medium">最近登录</th>
-                    <th className="px-5 py-2 font-medium text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => {
-                    const self = u.id === selfId;
-                    const busy = pending === u.id;
-                    return (
-                      <tr key={u.id} className={`border-t border-slate-100 ${u.disabled ? "text-slate-400" : ""}`}>
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className={u.disabled ? "" : "text-slate-900"}>{u.display_name}</span>
-                            {u.is_admin && <span className="chip-light">管理员</span>}
-                            {self && <span className="text-[11px] text-slate-400">（我）</span>}
-                          </div>
-                          <div className="font-mono text-[11px] text-slate-400">{u.username}</div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <StatusBadge user={u} />
-                        </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                          <span className={u.captured > 0 ? "text-emerald-600" : "text-slate-400"}>
-                            {u.captured}/{scenarioCount}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-[12px] text-slate-500 whitespace-nowrap">
-                          {formatTime(u.last_login_at)}
-                        </td>
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center justify-end gap-3 text-[12px] whitespace-nowrap">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className={linkBtn}
-                              onClick={() =>
-                                act(
-                                  u,
-                                  "reset_password",
-                                  `重置 ${u.username} 的密码？其当前登录会失效，并生成新的初始密码。`,
-                                )
-                              }
-                            >
-                              重置密码
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className={linkBtn}
-                              onClick={() =>
-                                act(
-                                  u,
-                                  "reset_progress",
-                                  `清除 ${u.username} 的全部产品数据与通关进度？此操作不可撤销。`,
-                                )
-                              }
-                            >
-                              重置进度
-                            </button>
-                            {!self && (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                className={linkBtn}
-                                onClick={() =>
-                                  u.is_admin
-                                    ? act(u, "revoke_admin", `取消 ${u.username} 的管理员身份？`)
-                                    : act(u, "grant_admin", `将 ${u.username} 设为管理员？`)
-                                }
-                              >
-                                {u.is_admin ? "取消管理员" : "设为管理员"}
-                              </button>
-                            )}
-                            {!self && (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                className={u.disabled ? linkBtn : dangerBtn}
-                                onClick={() =>
-                                  u.disabled
-                                    ? act(u, "enable")
-                                    : act(u, "disable", `停用 ${u.username}？其当前登录会立即失效。`)
-                                }
-                              >
-                                {u.disabled ? "启用" : "停用"}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      <section className="card overflow-hidden">
+        <div className="px-5 py-3 border-b border-line flex items-center justify-between">
+          <h2 className="text-[14px] font-semibold text-ink">全部账号</h2>
+          {users && (
+            <div className="text-[12px] text-muted">
+              共 {users.length} 个 · 管理员 {adminCount} 个
             </div>
           )}
-        </section>
-      </main>
-    </Shell>
+        </div>
+        {rowError && (
+          <div role="alert" className="px-5 py-2 text-[12px] text-danger border-b border-line">
+            {rowError}
+          </div>
+        )}
+        {loadError ? (
+          <div className="px-5 py-8 text-center text-[13px] text-danger">{loadError}</div>
+        ) : users === null ? (
+          <div className="px-5 py-8 text-center text-[13px] text-muted">加载中…</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[12px] text-muted bg-sunken/60">
+                  <th className="px-5 py-2 font-medium">账号</th>
+                  <th className="px-3 py-2 font-medium">状态</th>
+                  <th className="px-3 py-2 font-medium">通关</th>
+                  <th className="px-3 py-2 font-medium">最近登录</th>
+                  <th className="px-5 py-2 font-medium text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => {
+                  const self = u.id === selfId;
+                  const busy = pending === u.id;
+                  return (
+                    <tr key={u.id} className={`border-t border-line ${u.disabled ? "text-muted" : ""}`}>
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className={u.disabled ? "" : "text-ink font-medium"}>{u.display_name}</span>
+                          {u.is_admin && <Tag tone="brand">管理员</Tag>}
+                          {self && <span className="text-[11px] text-muted">（我）</span>}
+                        </div>
+                        <div className="font-mono text-[12px] text-muted">{u.username}</div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <StatusBadge user={u} />
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        <span className={`tabular-nums ${u.captured > 0 ? "text-ok" : "text-muted"}`}>
+                          {u.captured}/{scenarioCount}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-[12px] text-muted whitespace-nowrap">
+                        {formatTime(u.last_login_at)}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <div className="flex items-center justify-end gap-3 text-[12px] whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className={linkBtn}
+                            onClick={() =>
+                              act(
+                                u,
+                                "reset_password",
+                                `重置 ${u.username} 的密码？其当前登录会失效，并生成新的初始密码。`,
+                              )
+                            }
+                          >
+                            重置密码
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className={linkBtn}
+                            onClick={() =>
+                              act(u, "reset_progress", `清除 ${u.username} 的全部产品数据与通关进度？此操作不可撤销。`)
+                            }
+                          >
+                            重置进度
+                          </button>
+                          {!self && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className={linkBtn}
+                              onClick={() =>
+                                u.is_admin
+                                  ? act(u, "revoke_admin", `取消 ${u.username} 的管理员身份？`)
+                                  : act(u, "grant_admin", `将 ${u.username} 设为管理员？`)
+                              }
+                            >
+                              {u.is_admin ? "取消管理员" : "设为管理员"}
+                            </button>
+                          )}
+                          {!self && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className={u.disabled ? linkBtn : dangerBtn}
+                              onClick={() =>
+                                u.disabled
+                                  ? act(u, "enable")
+                                  : act(u, "disable", `停用 ${u.username}？其当前登录会立即失效。`)
+                              }
+                            >
+                              {u.disabled ? "启用" : "停用"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </AdminFrame>
   );
 }

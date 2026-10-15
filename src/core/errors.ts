@@ -3,7 +3,7 @@
  * 路由层不用 instanceof 判断：开发模式下各路由各有一份模块实例，挂在 globalThis 上的单例
  * （世界管理器、账号库）抛出的错误类，与路由里 import 的不是同一个类。
  */
-import { PASSWORD_CHANGE_REQUIRED } from "../lib/contracts.ts";
+import { LLM_NOT_CONFIGURED, PASSWORD_CHANGE_REQUIRED } from "../lib/contracts.ts";
 
 export abstract class LabError extends Error {
   abstract readonly httpStatus: number;
@@ -35,6 +35,12 @@ export class PasswordChangeRequiredError extends ForbiddenError {
 /**同一资源上已有操作在进行（如上一条消息还没回复完）。 */
 export class ConflictError extends LabError {
   readonly httpStatus = 409;
+}
+
+/**管理员还没在网页上配置模型（或配置已不可用），前端据此引导去模型设置。 */
+export class LlmNotConfiguredError extends LabError {
+  readonly httpStatus = 503;
+  readonly code = LLM_NOT_CONFIGURED;
 }
 
 /**账号业务校验失败（用户名不合法、口令错误等），映射为 400。 */

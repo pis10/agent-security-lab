@@ -1,4 +1,5 @@
 import type { TeachingRow } from "../core/teaching.ts";
+import type { LlmModelInfo, LlmSettingsInput, LlmSettingsView, LlmTestResult } from "../lib/contracts.ts";
 import {
   type AdminUser,
   type Observation,
@@ -14,10 +15,13 @@ export class ApiError extends Error {
   status: number;
   /**服务端返回的说明，表单直接展示。 */
   detail: string;
-  constructor(status: number, body: string) {
-    super(`${status} ${body}`);
+  /**服务端附带的机器可读原因，如 llm_not_configured。 */
+  code: string;
+  constructor(status: number, body: string, code = "") {
+    super(body);
     this.status = status;
     this.detail = body;
+    this.code = code;
   }
 }
 
@@ -52,7 +56,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
         window.location.href = "/account/password";
       }
     }
-    throw new ApiError(res.status, detail);
+    throw new ApiError(res.status, detail, code);
   }
   return res.json();
 }
@@ -82,6 +86,12 @@ export const api = {
       "/api/auth/password",
       post({ current_password: currentPassword, new_password: newPassword }),
     ),
+  llmSettings: () => req<{ settings: LlmSettingsView | null }>("/api/admin/llm"),
+  saveLlmSettings: (input: LlmSettingsInput) =>
+    req<{ settings: LlmSettingsView }>("/api/admin/llm", { method: "PUT", body: JSON.stringify(input) }),
+  testLlm: (input: LlmSettingsInput) => req<LlmTestResult>("/api/admin/llm/test", post(input)),
+  llmModels: (provider: string) =>
+    req<{ models: LlmModelInfo[] }>(`/api/admin/llm/models?provider=${encodeURIComponent(provider)}`),
   teachingProgress: () => req<{ rows: TeachingRow[] }>("/api/admin/progress"),
   setAnswersVisible: (visible: boolean) =>
     req<{ answers_visible: boolean }>("/api/admin/settings", post({ answers_visible: visible })),

@@ -6,24 +6,20 @@ import { api, errorText } from "./api";
 import { Icon } from "./components/Icon";
 import { MIN_PASSWORD_LENGTH, type PublicUser } from "./types";
 
-const INPUT =
-  "mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-800 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200";
-const SUBMIT =
-  "w-full rounded-md bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] py-2";
-
-function AuthCard({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
+/**登录与改密：居中的紧凑表单，面向内部技术人员，不做宣传页。 */
+function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen bg-slate-100 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2 font-mono font-bold text-lg text-accent mb-6">
-          <Icon name="target" size={18} />
-          ASL
+    <main className="min-h-screen bg-paper flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-[360px]">
+        <div className="flex items-center gap-2 mb-5">
+          <span className="h-7 w-7 rounded-md bg-brand text-white flex items-center justify-center">
+            <Icon name="target" size={15} strokeWidth={2} />
+          </span>
+          <span className="font-mono font-bold text-[15px] tracking-tight">ASL</span>
+          <span className="text-[13px] text-muted">Agent 安全靶场</span>
         </div>
-        <div className="p-card p-6">
-          <h1 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h1>
-          {subtitle && <div className="text-[13px] text-slate-500 mt-1 leading-relaxed">{subtitle}</div>}
-          <div className="mt-5">{children}</div>
-        </div>
+        <div className="card p-6">{children}</div>
+        <p className="mt-4 text-[12px] text-muted">账号由管理员创建，忘记密码请联系管理员重置。</p>
       </div>
     </main>
   );
@@ -50,8 +46,8 @@ function Field({
     if (focus) ref.current?.focus();
   }, [focus]);
   return (
-    <label className="block text-[12px] text-slate-500">
-      {label}
+    <label className="block">
+      <span className="block text-[13px] font-medium text-ink-2 mb-1.5">{label}</span>
       <input
         type={type}
         value={value}
@@ -59,7 +55,7 @@ function Field({
         autoComplete={autoComplete}
         ref={ref}
         required
-        className={INPUT}
+        className="field h-9"
       />
     </label>
   );
@@ -68,8 +64,11 @@ function Field({
 function FormError({ text }: { text: string | null }) {
   if (!text) return null;
   return (
-    <div className="flex items-start gap-1.5 text-[12px] text-red-600 leading-relaxed">
-      <Icon name="alert-triangle" size={12} className="mt-0.5 shrink-0" />
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-[13px] text-danger leading-relaxed"
+    >
+      <Icon name="alert-triangle" size={14} className="mt-0.5" />
       {text}
     </div>
   );
@@ -98,8 +97,9 @@ export function LoginForm({ next, firstRunAdmin }: { next: string; firstRunAdmin
   };
 
   return (
-    <AuthCard title="登录靶场" subtitle="账号由管理员创建。忘记密码请联系管理员重置。">
-      <form onSubmit={submit} className="space-y-3">
+    <AuthLayout>
+      <h1 className="text-[17px] font-semibold text-ink">登录</h1>
+      <form onSubmit={submit} className="mt-5 space-y-4">
         <Field label="用户名" value={username} onChange={setUsername} autoComplete="username" focus={!firstRunAdmin} />
         <Field
           label="密码"
@@ -110,17 +110,32 @@ export function LoginForm({ next, firstRunAdmin }: { next: string; firstRunAdmin
           focus={!!firstRunAdmin}
         />
         <FormError text={error} />
-        <button type="submit" disabled={busy || !username.trim() || !password} className={SUBMIT}>
+        <button type="submit" disabled={busy || !username.trim() || !password} className="btn-primary w-full">
           {busy ? "登录中…" : "登录"}
         </button>
       </form>
       {firstRunAdmin && (
-        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 leading-relaxed">
-          首次启动：管理员 <span className="font-mono">{firstRunAdmin}</span> 的初始密码在服务启动日志里（如部署时设置了
-          ASL_ADMIN_PASSWORD 则为该值）。登录后须先修改密码。
-        </div>
+        <p className="mt-4 text-[12px] text-muted leading-relaxed">
+          首次部署：<span className="font-mono">{firstRunAdmin}</span> 的初始密码为
+          ASL_ADMIN_PASSWORD，未设置时见服务启动日志。
+        </p>
       )}
-    </AuthCard>
+    </AuthLayout>
+  );
+}
+
+function Rule({ ok, children }: { ok: boolean; children: ReactNode }) {
+  return (
+    <li className={`flex items-center gap-2 text-[13px] ${ok ? "text-ok" : "text-muted"}`}>
+      {ok ? (
+        <Icon name="check" size={14} strokeWidth={2.2} />
+      ) : (
+        <span className="h-3.5 w-3.5 flex items-center justify-center" aria-hidden>
+          <span className="h-1.5 w-1.5 rounded-full bg-line-strong" />
+        </span>
+      )}
+      {children}
+    </li>
   );
 }
 
@@ -132,12 +147,16 @@ export function PasswordForm({ user }: { user: PublicUser }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const longEnough = next.length >= MIN_PASSWORD_LENGTH;
+  const matches = next !== "" && next === confirm;
+  const differs = next !== "" && next !== current;
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    if (next.length < MIN_PASSWORD_LENGTH) return setError(`新密码至少 ${MIN_PASSWORD_LENGTH} 位`);
-    if (next !== confirm) return setError("两次输入的新密码不一致");
-    if (next === current) return setError("新密码不能与当前密码相同");
+    if (!longEnough) return setError(`新密码至少 ${MIN_PASSWORD_LENGTH} 位`);
+    if (!matches) return setError("两次输入的新密码不一致");
+    if (!differs) return setError("新密码不能与当前密码相同");
     setBusy(true);
     setError(null);
     api
@@ -158,21 +177,20 @@ export function PasswordForm({ user }: { user: PublicUser }) {
   };
 
   return (
-    <AuthCard
-      title={mustChange ? "设置新密码" : "修改密码"}
-      subtitle={
-        mustChange ? (
+    <AuthLayout>
+      <h1 className="text-[17px] font-semibold text-ink">{mustChange ? "设置新密码" : "修改密码"}</h1>
+      <p className="mt-1 text-[13px] text-ink-2 leading-relaxed">
+        {mustChange ? (
           <>
-            <span className="font-mono">{user.username}</span>，首次登录请把管理员给你的初始密码换成自己的密码。
+            <span className="font-mono">{user.username}</span> 首次登录，需要把初始密码换成自己的密码。
           </>
         ) : (
           <>
-            当前账号 <span className="font-mono">{user.username}</span>。修改后其他设备上的登录会失效。
+            当前账号 <span className="font-mono">{user.username}</span>，修改后其他设备上的登录会失效。
           </>
-        )
-      }
-    >
-      <form onSubmit={submit} className="space-y-3">
+        )}
+      </p>
+      <form onSubmit={submit} className="mt-5 space-y-4">
         <Field
           label={mustChange ? "初始密码" : "当前密码"}
           type="password"
@@ -181,31 +199,30 @@ export function PasswordForm({ user }: { user: PublicUser }) {
           autoComplete="current-password"
           focus
         />
-        <Field
-          label={`新密码（至少 ${MIN_PASSWORD_LENGTH} 位）`}
-          type="password"
-          value={next}
-          onChange={setNext}
-          autoComplete="new-password"
-        />
+        <Field label="新密码" type="password" value={next} onChange={setNext} autoComplete="new-password" />
         <Field label="确认新密码" type="password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
+        <ul className="space-y-1.5" aria-label="密码要求">
+          <Rule ok={longEnough}>至少 {MIN_PASSWORD_LENGTH} 位</Rule>
+          <Rule ok={matches}>两次输入一致</Rule>
+          <Rule ok={differs}>与{mustChange ? "初始" : "当前"}密码不同</Rule>
+        </ul>
         <FormError text={error} />
-        <button type="submit" disabled={busy || !current || !next || !confirm} className={SUBMIT}>
-          {busy ? "保存中…" : "保存新密码"}
+        <button type="submit" disabled={busy || !current || !next || !confirm} className="btn-primary w-full">
+          {busy ? "保存中…" : mustChange ? "保存并进入" : "保存新密码"}
         </button>
       </form>
-      <div className="mt-4 flex items-center justify-between text-[12px] text-slate-500">
+      <div className="mt-5 flex items-center justify-between text-[13px]">
         {mustChange ? (
           <span />
         ) : (
-          <Link href="/" className="hover:text-slate-800">
-            返回靶场
+          <Link href="/" className="text-ink-2 hover:text-ink">
+            返回首页
           </Link>
         )}
-        <button type="button" onClick={logout} className="hover:text-slate-800">
+        <button type="button" onClick={logout} className="text-ink-2 hover:text-ink">
           退出登录
         </button>
       </div>
-    </AuthCard>
+    </AuthLayout>
   );
 }

@@ -1,9 +1,9 @@
-import { closeSync, ftruncateSync, mkdirSync, openSync, writeSync } from "node:fs";
+import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { request } from "node:http";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { requireLlm } from "../core/pi-runtime.ts";
-import { loadConfig } from "../lib/config.ts";
+import { activeLlm, requireLlm } from "../core/llm.ts";
+import { SettingsDB, setSettingsDb } from "../core/settings.ts";
 import { DEFAULT_SOCKET } from "../sandbox/protocol.ts";
 import { SMOKE_CASES } from "./cases.ts";
 import { type Sample, summarize } from "./results.ts";
@@ -12,6 +12,8 @@ import { runSmoke } from "./runner.ts";
 const HELP = `模型自检：真实模型、真实工具、独立临时世界；每个样本结束后清理。
 用法：pnpm smoke [--runs 3] [--scenario ticket-idor] [--timeout-ms 120000] [--output 文件.json]
 容器：node src/smoke/run.ts [同上参数]
+
+模型沿用管理员在网页「模型设置」保存的配置（data/runtime/settings.db）；--settings 可指定其他设置库。
 
 每关依次跑 N 次无防护和 N 次有防护，L4 每次包含两轮独立聊天。
 默认报告写入 data/runtime/smoke/；报告不包含 Key、模型回复、工具参数或凭据。
@@ -48,6 +50,7 @@ async function main() {
       scenario: { type: "string", multiple: true },
       "timeout-ms": { type: "string" },
       output: { type: "string" },
+      settings: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -58,9 +61,13 @@ async function main() {
   const unknown = ids.filter((id) => !SMOKE_CASES.some((entry) => entry.id === id));
   if (unknown.length) throw new Error(`未知关卡：${unknown.join(", ")}`);
   const cases = SMOKE_CASES.filter((entry) => ids.includes(entry.id));
+  if (values.settings) {
+    if (!existsSync(values.settings)) throw new Error(`设置库不存在：${values.settings}`);
+    setSettingsDb(new SettingsDB(values.settings));
+  }
   const model = await requireLlm();
   if (ids.includes("cmd-injection")) await checkSandbox();
-  const config = loadConfig();
+  const llm = activeLlm();
   const output = path.resolve(
     values.output ?? `data/runtime/smoke/${new Date().toISOString().replaceAll(":", "-")}.json`,
   );
@@ -79,8 +86,8 @@ async function main() {
       api: model.api,
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
-      thinking: config.thinkingLevel,
-      temperature: config.llmTemperature,
+      thinking: llm?.thinking,
+      temperature: llm?.temperature,
     },
     runs,
     timeoutMs,

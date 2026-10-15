@@ -7,18 +7,18 @@ import { useSessionUser } from "../session";
 import { Icon } from "./Icon";
 
 const ITEM =
-  "w-full flex items-center gap-2 px-3 py-1.5 text-left text-slate-300 hover:bg-elevated hover:text-slate-100";
+  "w-full flex items-center gap-2.5 px-3 h-9 rounded-md text-left text-[13px] text-ink-2 hover:bg-sunken hover:text-ink";
 
 function MenuLink({ href, icon, children }: { href: string; icon: string; children: ReactNode }) {
   return (
     <Link href={href} className={ITEM}>
-      <Icon name={icon} size={12} className="text-dim" />
+      <Icon name={icon} size={14} className="text-muted" />
       {children}
     </Link>
   );
 }
 
-/**顶栏账号菜单：改密、账号管理（管理员）、重置本人进度、退出。 */
+/**顶栏账号菜单：改密、重置本人进度、退出。管理入口在主导航。 */
 export function UserMenu() {
   const user = useSessionUser();
   const [open, setOpen] = useState(false);
@@ -63,44 +63,38 @@ export function UserMenu() {
     <div ref={ref} className="relative">
       <button
         type="button"
-        className="chip hover:text-slate-100"
+        className="flex items-center gap-2 h-9 pl-1 pr-2 rounded-lg hover:bg-sunken transition-colors"
         aria-expanded={open}
-        title={`当前账号：${user.username}`}
+        aria-haspopup="menu"
+        aria-label={`账号菜单：${user.display_name}`}
         onClick={() => setOpen((v) => !v)}
       >
-        <Icon name="user" size={10} />
-        <span className="max-w-32 truncate">{user.display_name}</span>
-        <Icon name="chevron-down" size={10} />
+        <span className="h-7 w-7 rounded-full bg-ink text-white text-[12px] font-semibold flex items-center justify-center">
+          {user.display_name.slice(0, 1).toUpperCase()}
+        </span>
+        <span className="hidden md:block max-w-28 truncate text-[13px] text-ink">{user.display_name}</span>
+        <Icon name="chevron-down" size={14} className="text-muted" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-52 panel py-1 shadow-pop z-40 text-[12px]">
-          <div className="px-3 py-2 border-b border-edge mb-1">
-            <div className="text-slate-100 truncate">{user.display_name}</div>
-            <div className="text-dim font-mono text-[11px] truncate">
-              {user.username}
-              {user.is_admin ? " · 管理员" : ""}
+        <div role="menu" className="absolute right-0 top-full mt-2 w-60 card shadow-pop p-1.5 z-50 rise-in">
+          <div className="px-3 pt-2 pb-3 border-b border-line mb-1.5">
+            <div className="text-[14px] font-medium text-ink truncate">{user.display_name}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
+              <span className="font-mono truncate">{user.username}</span>
+              <span aria-hidden>·</span>
+              <span>{user.is_admin ? "管理员" : "学员"}</span>
             </div>
           </div>
           <MenuLink href="/account/password" icon="key">
             修改密码
           </MenuLink>
-          {user.is_admin && (
-            <MenuLink href="/admin" icon="users">
-              账号管理
-            </MenuLink>
-          )}
-          {user.is_admin && (
-            <MenuLink href="/admin/progress" icon="activity">
-              教学进度
-            </MenuLink>
-          )}
           <button type="button" className={ITEM} onClick={resetMine}>
-            <Icon name="refresh" size={12} className="text-dim" />
+            <Icon name="refresh" size={14} className="text-muted" />
             重置我的进度
           </button>
-          <div className="border-t border-edge my-1" />
+          <div className="border-t border-line my-1.5" />
           <button type="button" className={ITEM} onClick={logout}>
-            <Icon name="arrow-right" size={12} className="text-dim" />
+            <Icon name="log-out" size={14} className="text-muted" />
             退出登录
           </button>
         </div>

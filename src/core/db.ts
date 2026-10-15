@@ -65,7 +65,6 @@ export class ProgressDB {
           defenses TEXT NOT NULL,
           PRIMARY KEY (user_id, scenario_id)
         );
-        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       `),
     );
   }
@@ -116,24 +115,6 @@ export class ProgressDB {
         }>,
     );
     return new Map(rows.map((r) => [Number(r.user_id), Number(r.n)]));
-  }
-
-  /**个人学习默认可看答案；管理员可统一关闭，服务端不再下发答案。 */
-  answersVisible(): boolean {
-    return this._with((db) => {
-      const row = db.prepare("SELECT value FROM settings WHERE key = 'answers_visible'").get();
-      return row?.value !== "false";
-    });
-  }
-
-  setAnswersVisible(visible: boolean): void {
-    this._with((db) =>
-      db
-        .prepare(
-          "INSERT INTO settings (key, value) VALUES ('answers_visible', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        )
-        .run(String(visible)),
-    );
   }
 
   recordRetest(

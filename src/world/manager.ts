@@ -11,10 +11,11 @@ import {
   lastAssistantText,
   looksLikePiTranscript,
   projectChat,
+  syncAgentModel,
 } from "../core/agent.ts";
 import { ProgressDB, USERS_DIR } from "../core/db.ts";
 import { BadRequestError, ConflictError } from "../core/errors.ts";
-import { requireLlm } from "../core/pi-runtime.ts";
+import { requireLlm } from "../core/llm.ts";
 import { SINKS } from "../core/sinks.ts";
 import { defensesOf, ToolContext } from "../core/tools.ts";
 import { Tracer } from "../core/trace.ts";
@@ -366,6 +367,8 @@ export class WorldManager {
         timedOut = true;
         world.agent.abort();
       }, this._config.turnTimeoutMs);
+      // 排队期间管理员可能改了模型设置：开跑前切到当前模型
+      await syncAgentModel(world.agent);
       await world.agent.prompt(message);
       if (timedOut) throw new Error("turn timeout");
       if (world.agent.state.errorMessage) throw new Error(world.agent.state.errorMessage);
@@ -541,8 +544,6 @@ export class WorldManager {
     const agent = await createLabAgent({
       systemPrompt: target.systemPrompt,
       tools: await target.buildTools(ctx),
-      thinkingLevel: this._config.thinkingLevel,
-      temperature: this._config.llmTemperature,
       messages,
     });
     attachTracer(agent, tracer);

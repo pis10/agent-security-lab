@@ -8,53 +8,33 @@
 
 运行使用 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。Compose 启动应用与报告执行调度服务；每次 `read_report` 用同一个镜像创建一次性容器，真实执行 `cat` / `id` 后销毁。
 
-模型走 [Pi 1.2.0](https://github.com/earendil-works/pi/tree/v1.2.0) 的 `pi-ai` / `pi-agent-core`，MCP 客户端使用 `pi-mcp`：协议与目录由 SDK 处理，进程直连厂商 API。模型目录用 Pi 包内清单，换模型 id 靠升级 Pi。
+模型走 [Pi 1.2.0](https://github.com/earendil-works/pi/tree/v1.2.0) 的 `pi-ai` / `pi-agent-core`，MCP 客户端使用 `pi-mcp`：协议与目录由 SDK 处理，进程直连模型服务。
 
 ```bash
-cp .env.example .env
-# 默认：ASL_LLM_PROVIDER=zai-coding-cn，填 ZAI_CODING_CN_API_KEY
+cp .env.example .env   # 可选：端口、并发、初始管理员密码
 docker compose up -d --build
 # http://127.0.0.1:8600
 ```
 
-`.env` 只放本机，compose 注入应用容器。服务绑在 `127.0.0.1:8600`。世界和通关进度在卷 `asl-data`；清零：`docker compose down -v`。
+`.env` 只放本机，compose 注入应用容器。服务绑在 `127.0.0.1:8600`。账号、模型设置、世界和通关进度都在卷 `asl-data`；清零：`docker compose down -v`。
 
-换厂商只改 `ASL_LLM_PROVIDER`、`ASL_LLM_MODEL` 和该厂商的原生 Key，例如：
+首次启动创建管理员 `admin`。初始密码取 `.env` 的 `ASL_ADMIN_PASSWORD`；未设置时随机生成，只在日志里出现一次（`docker compose logs asl | grep 初始密码`）。首次登录须修改密码。
 
-```bash
-ASL_LLM_PROVIDER=openai
-ASL_LLM_MODEL=gpt-4.1-mini
-OPENAI_API_KEY=sk-...
-```
+学员账号由管理员在「管理 › 账号管理」批量创建（每行一个用户名，可带显示名），初始密码只显示一次，本人首次登录须修改。忘记密码由管理员重置。每个账号的产品数据与通关进度相互独立。
 
-```bash
-ASL_LLM_PROVIDER=anthropic
-ASL_LLM_MODEL=claude-sonnet-4-6
-ANTHROPIC_API_KEY=sk-ant-...
-```
+### 配置模型
 
-```bash
-ASL_LLM_PROVIDER=openrouter
-ASL_LLM_MODEL=anthropic/claude-sonnet-4
-OPENROUTER_API_KEY=...
-```
+模型只在网页上配置：管理员登录后进入「管理 › 模型设置」。没配置之前，学员可以浏览关卡，但助手不会回复。
 
-目录里没有的网关或本地模型，用本项目的 `models.json` **子集**（不是 Pi coding-agent 的全量字段）：
+- **内置厂商**：Pi 包内的模型目录（OpenAI、Anthropic、DeepSeek、智谱、Kimi、OpenRouter 等），选厂商和模型、填 API Key 即可。需要 OAuth 或云凭据的厂商不在列表里。
+- **OpenAI 兼容服务**：vLLM、SGLang、Ollama 或自建网关，填以 `/v1` 结尾的地址和服务端模型名；服务不校验 Key 时可以留空。
+- **Anthropic 兼容服务**：填不带 `/v1` 的地址。
 
-```json
-{
-  "providers": {
-    "ollama": {
-      "baseUrl": "http://host.docker.internal:11434/v1",
-      "api": "openai-completions",
-      "apiKey": "ollama",
-      "models": [{ "id": "qwen2.5-coder:7b" }]
-    }
-  }
-}
-```
+自建服务的高级选项可以调整上下文长度、最大输出、兼容开关（`max_tokens` 字段、`store`、developer 角色、思考参数格式）和额外请求头。
 
-`ASL_MODELS_JSON` 指向该文件，`ASL_LLM_PROVIDER=ollama`，`ASL_LLM_MODEL=qwen2.5-coder:7b`。`api` 仅支持 `openai-completions` 与 `anthropic-messages`；`apiKey` 可以是字面量或 `$ENV_VAR`。
+保存前先点「测试连接」：它发一次带工具的请求，告诉你能否连通、模型会不会调用工具。自建服务最常见的问题是没开工具调用（如 vLLM 的 `--enable-auto-tool-choice` 与 `--tool-call-parser`）。保存后，下一轮对话即使用新模型，已有对话保留。
+
+Key 保存在数据卷的 `settings.db`（文件权限 600），页面只显示末四位。更换服务地址或厂商时，已保存的 Key 不会沿用到新服务，需要重新填写。
 
 不要把 coding-agent 的 `read` / `write` / `edit` / `bash` 装进靶场。模型只能看到各产品自己的工具。
 
@@ -69,7 +49,7 @@ ASL_TEST_IMAGE=agent-security-lab:sandbox-test corepack pnpm test:sandbox
 
 ## 模型自检
 
-换模型或调整模型服务配置后，用标准解法重复跑五关。沿用应用容器中的模型环境变量和沙箱：
+换模型或调整模型服务配置后，用标准解法重复跑五关。自检使用网页上保存的模型设置和应用容器中的沙箱：
 
 ```bash
 docker compose exec asl node src/smoke/run.ts --runs 3
@@ -77,7 +57,7 @@ docker compose exec asl node src/smoke/run.ts --runs 3
 docker exec agent-security-lab node src/smoke/run.ts --runs 3
 ```
 
-源码目录也可执行 `pnpm smoke`（自动读取本地 `.env`，已有环境变量优先）。L2 需要可用的沙箱 Unix socket；可用 `ASL_SANDBOX_SOCKET` 指定路径。只验证其他关卡无需沙箱，例如：
+源码目录也可执行 `pnpm smoke`（读取 `data/runtime/settings.db`，`--settings` 可指定其他设置库）。L2 需要可用的沙箱 Unix socket；可用 `ASL_SANDBOX_SOCKET` 指定路径。只验证其他关卡无需沙箱，例如：
 
 ```bash
 pnpm smoke --runs 3 --scenario ticket-idor --scenario token-audience
@@ -93,18 +73,18 @@ pnpm smoke --runs 3 --scenario ticket-idor --scenario token-audience
 - 错误样本附带来源、工具名和固定分类（例如 `invalid_token`、`context_limit`、`tool_calling_config`），不保存可能回显凭据的服务端原文。若一次防护样本既有拦截又有后续工具错误，按错误样本统计，同时保留拦截次数。
 - 退出码：`0` 全部符合预期；`1` 有未演示、错误、超时或防护绕过；`2` 配置失败或运行中断。中断报告的 `complete` 为 `false`，不能作为完整验收结果。
 
-自检会真实调用模型并消耗额度。小样本结果只说明当前标准解法的表现，不代表所有提示都稳定可用。若服务不产生工具调用，检查服务端的自动工具选择与对应 parser（例如 vLLM 的 `--enable-auto-tool-choice`）；若报上下文长度错误，核对服务端实际容量和 `models.json` 的 `contextWindow` / `maxTokens`。报告中的容量来自配置，并非对服务端的自动探测。
+自检会真实调用模型并消耗额度。小样本结果只说明当前标准解法的表现，不代表所有提示都稳定可用。若服务不产生工具调用，检查服务端的自动工具选择与对应 parser（例如 vLLM 的 `--enable-auto-tool-choice`）；若报上下文长度错误，核对服务端实际容量和模型设置里的「上下文长度」「最大输出」。报告中的容量来自配置，并非对服务端的自动探测。
 
 ## 怎么玩
 
 | 入口 | 地址 | 用途 |
 |---|---|---|
-| 靶场 | `/` | 打开仿真产品 |
-| 教学 | `/learn` | 原理、目标、分级提示、答案、通关条件 |
-| 观测 | `/observe` | 工具调用、外发箱、防护开关 |
-| 教师视图 | `/admin/progress` | 每人五关进度、复测记录与 CSV（管理员） |
+| 学习 | `/` | 五关学习路径与四个仿真产品 |
+| 关卡工作台 | `/range/<产品>?mission=<关卡>` | 左侧任务卡（目标、通关条件、原理、提示与答案），中间是产品，右侧观测抽屉 |
+| 观测 | `/observe` | 各产品的工具调用时间线、外发箱、防护开关 |
+| 管理 | `/admin` | 账号管理、教学进度（每人五关、复测、CSV）、模型设置（管理员） |
 
-按 L1 至 L5 进行。请先在教学页阅读原理与目标，再进入产品尝试；必要时查看答案。观测中开启防护后，返回产品清空对话再试（无需重置；重置会清除当前课程的通关记录）。产品「重置」清除该产品数据及当前课程的通关进度，同产品其他课程不受影响；账号菜单「重置我的进度」只清当前账号的数据。切换课程会重置对应产品。同一产品回复期间，再发消息、清空、重置和修改防护会返回 409，等待本轮结束后再操作。
+按 L1 至 L5 进行。在工作台左侧任务卡阅读原理与目标，再在产品里尝试；卡住时逐级展开提示，最后才是答案。通关后在右侧观测抽屉开启防护，清空对话再试（无需重置；重置会清除当前关卡的通关记录）。产品「重置」清除该产品数据及当前课程的通关进度，同产品其他课程不受影响；账号菜单「重置我的进度」只清当前账号的数据。切换课程会重置对应产品。同一产品回复期间，再发消息、清空、重置和修改防护会返回 409，等待本轮结束后再操作。
 
 | 关 | 产品 | 攻击面 |
 |---|---|---|
@@ -116,7 +96,7 @@ pnpm smoke --runs 3 --scenario ticket-idor --scenario token-audience
 
 防护默认关。命中防护记 `policy_blocked`。
 
-产品顶栏的任务卡直接显示目标、通关条件，按「提示 1 → 提示 2 → 答案」逐步展开。自由探索时可从「选择任务」进入课程。管理员在教学进度页统一控制答案是否开放；默认开放，关闭后服务端不再向学员下发答案（管理员始终可见），已打开的页面需要刷新，已看过的内容无法收回。
+任务卡实时显示通关条件的达成情况，提示按「提示 1 → 提示 2 → 答案」逐步展开。不带关卡进入产品为自由探索，可在任务卡里选择关卡。工作台里按 `` Ctrl+` `` 开关观测抽屉。管理员在教学进度页统一控制答案是否开放；默认开放，关闭后服务端不再向学员下发答案（管理员始终可见），已打开的页面需要刷新，已看过的内容无法收回。
 
 教学进度显示首次通关时间，以及通关后开启该关全部防护、实际调用相关工具的最近一次复测。仅开启开关、普通聊天或刷新页面不算复测；「实际拦截」「已调用，未见拦截」「运行出错」分开显示，不把没有通关当成防护成功。CSV 使用 UTC 时间，页面显示浏览器当地时间。
 
@@ -138,7 +118,7 @@ ASL_WORLD_IDLE_MS=900000
 
 ```
 src/app/         页面与 HTTP 入口（产品 UI、/api、/sink、/internal、/idp、/insights-warehouse）
-src/core/        agent（Pi 循环）、工具上下文、轨迹、断言、外发箱、进度库
+src/core/        agent（Pi 循环）、模型设置、工具上下文、轨迹、断言、外发箱、进度库
 src/sandbox/     报告执行调度器与一次性容器入口
 src/targets/     四个产品
 src/scenarios/   五关课
@@ -147,13 +127,13 @@ src/ui/          客户端界面
 src/lib/         配置、契约、路由助手
 mcpservers/      MCP stdio server
 data/seeds/      种子
-data/runtime/    运行时世界（gitignore，容器内挂卷）
+data/runtime/    运行时数据：账号、模型设置、世界、进度（gitignore，容器内挂卷）
 agent-security-notes/  Agent 安全教学文章与截图
 ```
 
 ## 安全
 
-- API Key 只在 `.env`（使用各厂商原生变量名，如 `ZAI_CODING_CN_API_KEY`）。
+- 模型 API Key 由管理员在网页上填写，保存在数据卷的 `settings.db`（权限 600），不进镜像、日志或页面。
 - 端口只发布到回环地址。
 - 应用容器非 root、根文件系统只读、丢弃全部 capabilities；持久数据写入 `data/runtime`，临时文件写入 `/tmp`。
 - HTTP 工具只能请求本站服务；元数据 IP 映射到站内仿真响应，其他地址返回模拟连接失败。重定向逐跳检查，这层限制始终生效，不受教学防护开关影响，也不限制模型客户端连接配置的模型服务。

@@ -84,12 +84,14 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
     return f.kinds.length === 0 || f.kinds.includes(e.kind);
   });
 
+  // 新事件到来时，若正停在底部附近就跟随滚动
+  const count = shown.length;
   useEffect(() => {
     const el = boxRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (!el || count === 0) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
     if (nearBottom) el.scrollTo({ top: el.scrollHeight });
-  }, []);
+  }, [count]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -100,7 +102,7 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
             key={f.id}
             onClick={() => setFilter(f.id)}
             className={`px-2.5 py-1 rounded-md text-[12px] transition-colors ${
-              filter === f.id ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+              filter === f.id ? "bg-ink text-white" : "text-muted hover:text-ink hover:bg-sunken"
             }`}
           >
             {f.label}
@@ -109,8 +111,8 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
       </div>
       <div ref={boxRef} className="product-scroll flex-1 overflow-y-auto px-4 pb-4">
         {shown.length === 0 && (
-          <div className="h-full min-h-[12rem] flex flex-col items-center justify-center text-center text-slate-400">
-            <Icon name="activity" size={20} className="mb-2 text-slate-300" />
+          <div className="h-full min-h-[12rem] flex flex-col items-center justify-center text-center text-muted">
+            <Icon name="activity" size={20} className="mb-2 text-line-strong" />
             <div className="text-[13px]">助手调用工具后，步骤将按时间顺序显示于此</div>
           </div>
         )}
@@ -125,7 +127,7 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
               <li key={`${ev.ts}-${i}`} className="flex gap-3">
                 <div className="flex flex-col items-center w-4 shrink-0">
                   <div className={`h-2.5 w-2.5 rounded-full mt-2 ${meta.dot}`} />
-                  {i < shown.length - 1 && <div className="w-px flex-1 bg-slate-200 my-1" />}
+                  {i < shown.length - 1 && <div className="w-px flex-1 bg-line my-1" />}
                 </div>
                 <div className="min-w-0 flex-1 pb-4">
                   <div className="flex items-center gap-2 mb-1">
@@ -135,16 +137,16 @@ export function EventTimeline({ events }: { events: TraceEvent[] }) {
                       <Icon name={meta.icon} size={11} />
                       {meta.label}
                     </span>
-                    <span className="font-mono text-[11px] text-slate-400">{timeOf(ev.ts)}</span>
+                    <span className="font-mono text-[11px] text-muted">{timeOf(ev.ts)}</span>
                   </div>
-                  <pre className="whitespace-pre-wrap break-all text-[13px] leading-relaxed text-slate-700 font-mono">
+                  <pre className="whitespace-pre-wrap break-all text-[12.5px] leading-relaxed text-ink-2 font-mono">
                     {body}
                   </pre>
                   {long && (
                     <button
                       type="button"
                       onClick={() => setOpen(expanded ? null : i)}
-                      className="mt-1 text-[12px] text-slate-500 hover:text-slate-800"
+                      className="mt-1 text-[12px] text-muted hover:text-ink"
                     >
                       {expanded ? "收起" : "展开全部"}
                     </button>

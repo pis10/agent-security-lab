@@ -5,16 +5,17 @@ import path from "node:path";
 import test from "node:test";
 import { SCENARIOS } from "../scenarios/index.ts";
 import { ProgressDB } from "./db.ts";
+import { SettingsDB } from "./settings.ts";
 import { scenarioForLearner, teachingCsv, teachingRows } from "./teaching.ts";
 
 test("答案开关持久化；关闭时学员拿到的序列化数据没有 solution，仍保留分级提示，管理员不受影响", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "asl-teaching-"));
   try {
-    const file = path.join(dir, "progress.db");
-    const db = new ProgressDB(file);
+    const file = path.join(dir, "settings.db");
+    const db = new SettingsDB(file);
     assert.equal(db.answersVisible(), true);
     db.setAnswersVisible(false);
-    assert.equal(new ProgressDB(file).answersVisible(), false);
+    assert.equal(new SettingsDB(file).answersVisible(), false);
     for (const scenario of SCENARIOS) {
       const redacted = scenarioForLearner(scenario, { answersVisible: db.answersVisible(), isAdmin: false });
       assert.equal(Object.hasOwn(redacted, "solution"), false);
@@ -24,8 +25,6 @@ test("答案开关持久化；关闭时学员拿到的序列化数据没有 solu
       // 管理员带课时始终能看到答案
       assert.equal(scenarioForLearner(scenario, { answersVisible: false, isAdmin: true }).solution, scenario.solution);
     }
-    db.clearUser(1);
-    assert.equal(db.answersVisible(), false);
   } finally {
     rmSync(dir, { recursive: true });
   }

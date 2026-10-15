@@ -1,56 +1,140 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
-import { observeUrl, productOf } from "./catalog";
-import { LlmBadge } from "./components/Badge";
+import { ApiError, api, errorText } from "./api";
+import { productOf } from "./catalog";
+import { ModelBadge, Tag, TierBadge } from "./components/Badge";
 import { CaptureToast } from "./components/CaptureToast";
+import { ExternalMailDialog } from "./components/ExternalMailDialog";
 import { Icon } from "./components/Icon";
-import { AppNav } from "./components/Shell";
-import { TaskHints } from "./components/TaskHints";
+import { ObservePanel, type ObserveTab } from "./components/ObservePanel";
+import { BrandMark } from "./components/Shell";
+import { TaskPanel } from "./components/TaskPanel";
 import { UserMenu } from "./components/UserMenu";
+import { useSessionUser } from "./session";
 import { SIMS } from "./sims";
-import type { ChatMessage, Meta, Observation, Scenario } from "./types";
-import { assertionLabel } from "./types";
+import {
+  type ChatMessage,
+  LLM_NOT_CONFIGURED,
+  type Meta,
+  type Observation,
+  type Scenario,
+  type SinkEvent,
+  type TargetInfo,
+  type TraceEvent,
+} from "./types";
+
+type RunStatus = "idle" | "queued" | "running";
+
+const WIDE = "(min-width: 1024px)";
+// 两侧面板同时展开时，产品区至少要留出这么宽，否则打开一侧就收起另一侧
+const ROOMY = "(min-width: 1600px)";
+const roomy = () => window.matchMedia(ROOMY).matches;
+
+function RunChip({ status }: { status: RunStatus }) {
+  if (status === "idle") return null;
+  return status === "queued" ? (
+    <Tag tone="warn" icon="clock" title="前面的对话结束后会自动开始，请勿重复发送">
+      排队中
+    </Tag>
+  ) : (
+    <span className="tag border-info/25 bg-info-soft text-info">
+      <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-info" aria-hidden />
+      助手处理中
+    </span>
+  );
+}
+
+/**打不开产品：未配置模型时按身份给出下一步，其他错误原样展示。 */
+function WorldError({ error, isAdmin }: { error: { message: string; code: string }; isAdmin: boolean }) {
+  const missing = error.code === LLM_NOT_CONFIGURED;
+  return (
+    <div className="h-full flex items-center justify-center p-6">
+      <div className="card max-w-md w-full p-6 text-center">
+        <span
+          className={`mx-auto h-11 w-11 rounded-xl flex items-center justify-center ${
+            missing ? "bg-warn-soft text-warn" : "bg-danger-soft text-danger"
+          }`}
+        >
+          <Icon name="alert-triangle" size={20} />
+        </span>
+        <h2 className="mt-3 text-[16px] font-semibold text-ink">{missing ? "尚未配置模型" : "无法打开产品"}</h2>
+        <p className="mt-1.5 text-[13px] text-ink-2 leading-relaxed">
+          {missing
+            ? isAdmin
+              ? `${error.message}。配置并测试连接后刷新本页即可开始，任务卡可以先看。`
+              : "管理员还没有配置模型，助手暂时无法回复。请联系管理员，任务卡可以先看。"
+            : error.message}
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          {missing && isAdmin && (
+            <Link href="/admin/model" className="btn-primary">
+              去配置模型
+            </Link>
+          )}
+          <Link href="/" className="btn">
+            返回学习
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function Workspace({
-  targetId,
+  target,
   missionId,
   scenario,
   meta,
   missions,
 }: {
-  targetId: string;
+  target: TargetInfo;
   missionId: string;
   scenario: Scenario | null;
   meta: Meta;
   missions: Scenario[];
 }) {
-  const nav = useRouter();
+  const targetId = target.id;
+  const user = useSessionUser();
+  const product = productOf(targetId);
 
   const [ready, setReady] = useState(false);
-  const [appliedDefenses, setAppliedDefenses] = useState<Set<string>>(new Set());
+  const [worldError, setWorldError] = useState<{ message: string; code: string } | null>(null);
+  const [defenses, setDefenses] = useState<Set<string>>(new Set());
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
-  const [runStatus, setRunStatus] = useState<"idle" | "queued" | "running">("idle");
+  const [runStatus, setRunStatus] = useState<RunStatus>("idle");
   const [simState, setSimState] = useState<Record<string, unknown>>({});
   const [observations, setObservations] = useState<Observation[]>([]);
-  const [missionOpen, setMissionOpen] = useState(false);
   const [toast, setToast] = useState<Observation[]>([]);
-  const [worldError, setWorldError] = useState<string | null>(null);
-  // 外部来信（攻击者投递）：仅邮件产品，模拟从任意发件人向本收件箱投信
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [observeOpen, setObserveOpen] = useState(false);
+  const [observeTab, setObserveTab] = useState<ObserveTab>("timeline");
+  const [trace, setTrace] = useState<TraceEvent[]>([]);
+  const [sink, setSink] = useState<SinkEvent[]>([]);
+  const [defenseNote, setDefenseNote] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [extOpen, setExtOpen] = useState(false);
-  const [extFrom, setExtFrom] = useState("");
-  const [extSubject, setExtSubject] = useState("");
-  const [extBody, setExtBody] = useState("");
-  const [extBusy, setExtBusy] = useState(false);
-  const [extErr, setExtErr] = useState<string | null>(null);
+  const [wide, setWide] = useState(true);
   const seenPassed = useRef<Set<string>>(new Set());
   const passedPrimed = useRef(false);
   const busyRef = useRef(false);
 
-  const product = productOf(targetId);
+  // 宽屏默认展开任务卡；窄屏两侧都收起，按需以浮层打开
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE);
+    setWide(mq.matches);
+    setTaskOpen(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => {
+      setWide(e.matches);
+      if (!e.matches) {
+        setTaskOpen(false);
+        setObserveOpen(false);
+      }
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,18 +146,24 @@ export function Workspace({
       .ensureWorld(targetId, missionId || null)
       .then((w) => {
         if (cancelled) return;
-        setAppliedDefenses(new Set(w.enabled_defenses));
+        setDefenses(new Set(w.enabled_defenses));
         setMessages(w.messages ?? []);
         setRunStatus(w.run_status);
         setReady(true);
       })
       .catch((e) => {
-        if (!cancelled) setWorldError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setWorldError({ message: errorText(e), code: e instanceof ApiError ? e.code : "" });
       });
     return () => {
       cancelled = true;
     };
   }, [targetId, missionId]);
+
+  const openObserve = useCallback((tab: ObserveTab) => {
+    setObserveTab(tab);
+    setObserveOpen(true);
+    if (!roomy()) setTaskOpen(false);
+  }, []);
 
   useEffect(() => {
     if (!ready) return;
@@ -88,7 +178,7 @@ export function Workspace({
         .then((list) => {
           const w = list.find((x) => x.target_id === targetId);
           if (w) {
-            setAppliedDefenses(new Set(w.enabled_defenses));
+            setDefenses(new Set(w.enabled_defenses));
             setRunStatus(w.run_status);
           }
         })
@@ -99,6 +189,16 @@ export function Workspace({
           if (!busyRef.current) setMessages(w.messages ?? []);
         })
         .catch(() => {});
+      if (observeOpen) {
+        api
+          .trace(targetId)
+          .then(setTrace)
+          .catch(() => {});
+        api
+          .sink(targetId)
+          .then(setSink)
+          .catch(() => {});
+      }
       api
         .observations(targetId)
         .then((body) => {
@@ -112,47 +212,42 @@ export function Workspace({
           const fresh = passedNow.filter((o) => !seenPassed.current.has(o.scenario_id));
           if (fresh.length) {
             for (const o of fresh) seenPassed.current.add(o.scenario_id);
-            const preferred = missionId
-              ? [
-                  ...fresh.filter((o) => o.scenario_id === missionId),
-                  ...fresh.filter((o) => o.scenario_id !== missionId),
-                ]
-              : fresh;
-            setToast(preferred);
+            setToast([
+              ...fresh.filter((o) => o.scenario_id === missionId),
+              ...fresh.filter((o) => o.scenario_id !== missionId),
+            ]);
           }
         })
         .catch(() => {});
     };
     tick();
     const timer = setInterval(tick, 2000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [ready, missionId, targetId]);
+    return () => clearInterval(timer);
+  }, [ready, missionId, targetId, observeOpen]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setMissionOpen(false);
       if ((e.ctrlKey || e.metaKey) && e.key === "`") {
         e.preventDefault();
-        nav.push(observeUrl(targetId));
+        setObserveOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [nav, targetId]);
+  }, []);
 
   const send = useCallback(
     (message: string) => {
       if (!ready || busy || runStatus !== "idle") return;
       setMessages((m) => [...m, { role: "user", content: message }]);
       setBusy(true);
+      setDefenseNote(null);
       busyRef.current = true;
       api
         .chat(targetId, message)
         .then(() => api.chatMessages(targetId))
         .then((w) => setMessages(w.messages ?? []))
-        .catch((e) => setMessages((m) => [...m, { role: "assistant", content: `[error] ${e.message}` }]))
+        .catch((e) => setMessages((m) => [...m, { role: "assistant", content: `[error] ${errorText(e)}` }]))
         .finally(() => {
           busyRef.current = false;
           setBusy(false);
@@ -166,277 +261,257 @@ export function Workspace({
     async (action: string, args: Record<string, unknown>) => {
       if (!ready) return;
       const result = await api.act(targetId, action, args);
-      const state = await api.sim(targetId);
-      setSimState(state);
+      setSimState(await api.sim(targetId));
       return result;
     },
     [ready, targetId],
   );
 
-  const deliverExtMail = useCallback(() => {
-    setExtBusy(true);
-    setExtErr(null);
-    api
-      .act(targetId, "import_email", { from: extFrom, subject: extSubject, body: extBody })
-      .then(() => api.sim(targetId))
-      .then((state) => {
-        setSimState(state);
-        setExtOpen(false);
-        setExtFrom("");
-        setExtSubject("");
-        setExtBody("");
-      })
-      .catch((e) => setExtErr(e instanceof Error ? e.message : String(e)))
-      .finally(() => setExtBusy(false));
-  }, [targetId, extFrom, extSubject, extBody]);
-
   const resetChat = useCallback(() => {
     if (!ready || busy) return;
     const prev = messages;
-    if (prev.length === 0) return;
     setMessages([]);
+    setDefenseNote(null);
     api
       .clearChat(targetId)
       .then((w) => setMessages(w.messages ?? []))
-      .catch(() => setMessages(prev));
+      .catch((e) => {
+        setMessages(prev);
+        setNotice(errorText(e));
+      });
   }, [ready, busy, targetId, messages]);
 
+  const toggleDefense = (id: string) => {
+    const next = new Set(defenses);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    const prev = defenses;
+    setDefenses(next);
+    api
+      .setDefenses(targetId, [...next])
+      .then(() => setDefenseNote(messages.length > 0 ? "防护已更新。清空对话后再试，助手不会沿用之前的上下文。" : null))
+      .catch((e) => {
+        setDefenses(prev);
+        setNotice(errorText(e));
+      });
+  };
+
   const resetWorld = () => {
-    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发将被清除，通关进度仅清除当前课程。`)) return;
+    if (!confirm(`将 ${product.brand} 恢复为初始数据？对话、调用记录、外发将被清除，通关进度仅清除当前关卡。`)) return;
     api
       .resetWorld(targetId, missionId || null)
       .then((w) => {
         setMessages(w.messages ?? []);
-        setAppliedDefenses(new Set(w.enabled_defenses));
+        setDefenses(new Set(w.enabled_defenses));
         setObservations([]);
+        setTrace([]);
+        setSink([]);
         setToast([]);
         setSimState({});
+        setDefenseNote(null);
         seenPassed.current = new Set();
       })
-      .catch((e) => setWorldError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setNotice(errorText(e)));
   };
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const Sim = SIMS[targetId] ?? SIMS.__placeholder;
   const missionObs = observations.find((o) => o.scenario_id === missionId);
-  const missionChecks = missionObs?.checks?.length
-    ? missionObs.checks
-    : (scenario?.assertions ?? []).map((a) => ({
-        label: assertionLabel(a) || "条件",
-        passed: false,
-      }));
+  const working = busy || runStatus !== "idle";
+  const overlay = "fixed top-14 bottom-0 z-40 w-[min(380px,100%)] bg-surface shadow-pop";
 
   return (
-    <div className="h-screen flex flex-col bg-slate-100" style={{ colorScheme: "light" }}>
-      <header className="h-10 shrink-0 border-b border-slate-800 bg-[#111827] text-slate-200 px-3 flex items-center gap-2.5">
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 font-mono text-accent font-bold text-[13px] hover:text-accent/80"
-          title="返回靶场"
-        >
-          <Icon name="arrow-left" size={13} />
-          ASL
-        </Link>
-        <AppNav active="range" compact />
-        <span className="text-dim text-xs font-mono">/</span>
-        <span className="text-[13px] font-semibold truncate">{product.brand}</span>
-        <span className="flex-1" />
-
-        {scenario && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMissionOpen((v) => !v)}
-              className={`chip ${missionObs?.passed ? "text-ok border-ok/50" : "text-warn border-warn/40"}`}
-            >
-              <Icon name="target" size={10} />
-              <span>任务卡 · {scenario.tier}</span>
-              {missionObs?.passed ? (
-                <span>已通关</span>
-              ) : missionObs && missionObs.total > 0 ? (
-                <span>
-                  {missionObs.passed_count}/{missionObs.total}
-                </span>
-              ) : null}
-            </button>
-            {missionOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-[min(26rem,90vw)] max-h-[75vh] overflow-y-auto panel p-4 shadow-pop z-40">
-                <h2 className="text-sm font-semibold text-slate-100">{scenario.title}</h2>
-                <p className="mt-2 text-[13px] text-slate-300 leading-relaxed">{scenario.goal}</p>
-                <div className="mt-3 text-xs text-dim">通关条件</div>
-                {missionChecks.length > 0 && (
-                  <ul className="mt-2 space-y-1">
-                    {missionChecks.map((c, i) => (
-                      <li key={i} className="flex items-start gap-1.5 text-[11px] leading-relaxed">
-                        {c.passed ? (
-                          <Icon name="check" size={11} className="mt-1 text-ok shrink-0" />
-                        ) : (
-                          <span className="mt-[6px] h-[5px] w-[5px] rounded-full border border-dim shrink-0" />
-                        )}
-                        <span className={c.passed ? "text-ok" : "text-slate-300"}>{c.label}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {missionObs && missionChecks.length === 0 && (
-                  <div className="mt-2 text-[11px] text-dim">
-                    {missionObs.passed ? "观测页已记录相关结果" : "外发与工具结果将记录于观测页"}
-                  </div>
-                )}
-                <div className="mt-4 border-t border-edge pt-3 text-slate-300">
-                  <TaskHints key={scenario.id} scenario={scenario} />
-                </div>
-                <Link
-                  href={`/learn/${scenario.id}`}
-                  className="btn w-full mt-2 text-[12px] py-1"
-                  onClick={() => setMissionOpen(false)}
-                >
-                  <Icon name="book-open" size={12} />
-                  查看课程
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!scenario && (
-          <details className="relative">
-            <summary className="chip cursor-pointer">选择任务</summary>
-            <div className="absolute right-0 top-full mt-2 w-64 panel p-3 shadow-pop z-40 space-y-2">
-              {missions.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/range/${targetId}?mission=${s.id}`}
-                  className="block text-xs text-slate-300 hover:text-white"
-                >
-                  {s.tier} · {s.title}
-                </Link>
-              ))}
-            </div>
-          </details>
-        )}
-        {appliedDefenses.size > 0 && (
-          <Link href={observeUrl(targetId)} className="chip text-ok border-ok/50" title="在观测页管理防护">
-            <Icon name="shield-check" size={10} />
-            防护 {appliedDefenses.size}
+    <div className="h-dvh flex flex-col bg-paper text-ink">
+      <header className="h-14 shrink-0 bg-surface border-b border-line px-3 sm:px-4 flex items-center gap-2 sm:gap-3">
+        <BrandMark compact />
+        <nav aria-label="位置" className="hidden sm:flex items-center gap-1.5 min-w-0 text-[13px]">
+          <Link href="/" className="text-muted hover:text-ink">
+            学习
           </Link>
+          <Icon name="chevron-right" size={13} className="text-line-strong shrink-0" />
+          <span className="text-ink-2 truncate">{product.brand}</span>
+          {scenario && (
+            <>
+              <Icon name="chevron-right" size={13} className="text-line-strong shrink-0" />
+              <TierBadge tier={scenario.tier} size="sm" />
+              <span className="font-medium text-ink truncate">{scenario.title}</span>
+            </>
+          )}
+        </nav>
+        <span className="flex-1" />
+        <RunChip status={runStatus} />
+        {missionObs?.passed && (
+          <Tag tone="ok" icon="flag">
+            已通关
+          </Tag>
         )}
+        <span className="hidden xl:inline-flex">
+          <ModelBadge model={meta.llm_model} />
+        </span>
+        <button
+          type="button"
+          className={`btn btn-sm ${taskOpen ? "bg-sunken" : ""}`}
+          aria-pressed={taskOpen}
+          aria-label="任务卡"
+          onClick={() => {
+            if (!taskOpen && !roomy()) setObserveOpen(false);
+            setTaskOpen(!taskOpen);
+          }}
+        >
+          <Icon name="target" size={13} />
+          <span className="hidden md:inline">任务</span>
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${observeOpen ? "bg-sunken" : ""}`}
+          aria-pressed={observeOpen}
+          aria-label="观测"
+          title="观测：工具调用、外发与防护（Ctrl+`）"
+          onClick={() => (observeOpen ? setObserveOpen(false) : openObserve(observeTab))}
+        >
+          <Icon name="activity" size={13} />
+          <span className="hidden md:inline">观测</span>
+          {defenses.size > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-ok">
+              <Icon name="shield-check" size={12} />
+              {defenses.size}
+            </span>
+          )}
+        </button>
         {targetId === "mail_agent" && (
           <button
             type="button"
-            className="chip hover:text-slate-100"
-            title="以任意发件人身份向本收件箱投递一封邮件（模拟外部来信，攻击者视角）"
+            className="btn btn-sm"
+            title="以攻击者身份向收件箱投递邮件"
+            aria-label="外部来信"
             onClick={() => setExtOpen(true)}
           >
-            <Icon name="external-link" size={10} />
-            外部来信
+            <Icon name="mail" size={13} />
+            <span className="hidden md:inline">外部来信</span>
           </button>
         )}
-        <LlmBadge model={meta.llm_model} />
         <button
           type="button"
+          className="btn-ghost btn-sm"
+          title="恢复本产品的初始数据"
+          aria-label="重置产品"
           onClick={resetWorld}
-          className="chip hover:text-slate-100"
-          title="清除本产品数据及相关通关进度"
         >
-          <Icon name="refresh" size={10} />
-          重置
+          <Icon name="refresh" size={13} />
+          <span className="hidden lg:inline">重置</span>
         </button>
-        <Link
-          href={observeUrl(targetId)}
-          className="chip hover:text-slate-100"
-          title="观测：调用记录、外发、防护 (Ctrl+`)"
-        >
-          <Icon name="activity" size={10} />
-          观测
-        </Link>
         <UserMenu />
       </header>
 
-      {runStatus !== "idle" && (
-        <div role="status" className="shrink-0 bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-800">
-          {runStatus === "queued" ? "排队中：前面的对话结束后会自动开始，请勿重复发送。" : "助手正在处理本轮任务…"}
-        </div>
-      )}
-      <div className="flex-1 min-h-0">
-        {ready ? (
-          <Sim
-            simState={simState}
-            messages={messages}
-            onSend={send}
-            onAct={act}
-            onResetChat={resetChat}
-            busy={busy || runStatus !== "idle"}
+      <div className="flex-1 min-h-0 flex relative">
+        {taskOpen && (
+          <aside
+            aria-label="任务卡"
+            className={
+              wide
+                ? "w-[340px] shrink-0 border-r border-line bg-surface overflow-y-auto"
+                : `${overlay} left-0 overflow-y-auto drawer-in`
+            }
+          >
+            <TaskPanel
+              scenario={scenario}
+              observation={missionObs}
+              missions={missions}
+              targetId={targetId}
+              defensesOn={defenses.size}
+              onOpenObserve={openObserve}
+            />
+          </aside>
+        )}
+
+        <main className="flex-1 min-w-0 relative">
+          {ready ? (
+            <Sim
+              simState={simState}
+              messages={messages}
+              onSend={send}
+              onAct={act}
+              onResetChat={resetChat}
+              busy={working}
+            />
+          ) : worldError ? (
+            <WorldError error={worldError} isAdmin={!!user?.is_admin} />
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted text-[13px]">
+              正在打开 {product.brand}…
+            </div>
+          )}
+        </main>
+
+        {observeOpen && (
+          <aside
+            aria-label="观测"
+            className={wide ? "w-[420px] shrink-0 border-l border-line bg-surface" : `${overlay} right-0 drawer-in`}
+          >
+            <ObservePanel
+              targetId={targetId}
+              tab={observeTab}
+              onTab={setObserveTab}
+              trace={trace}
+              sink={sink}
+              defenses={target.defenses}
+              enabled={defenses}
+              onToggleDefense={toggleDefense}
+              defenseNote={defenseNote}
+              onClearChat={resetChat}
+              busy={working}
+              onClose={() => setObserveOpen(false)}
+            />
+          </aside>
+        )}
+
+        {!wide && (taskOpen || observeOpen) && (
+          <button
+            type="button"
+            aria-label="关闭浮层"
+            className="fixed inset-0 top-14 z-30 bg-ink/20"
+            onClick={() => {
+              setTaskOpen(false);
+              setObserveOpen(false);
+            }}
           />
-        ) : worldError ? (
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-500 px-6 text-center">
-            <div className="text-sm text-red-600">无法打开产品</div>
-            <p className="text-[13px] max-w-md leading-relaxed">{worldError}</p>
-            <Link
-              href="/"
-              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700"
-            >
-              返回靶场
-            </Link>
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center text-slate-400 text-sm">
-            正在打开 {product.brand}…
-          </div>
         )}
       </div>
 
-      {targetId === "mail_agent" && extOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-pop p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[13px] font-semibold text-slate-900">外部来信（攻击者投递）</div>
-              <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => setExtOpen(false)}>
-                <Icon name="x" size={14} />
-              </button>
-            </div>
-            <p className="text-[12px] leading-relaxed text-slate-500">
-              以任意发件人身份向本收件箱投递一封邮件。现实中这封信从攻击者自己的服务器发出，落进受害者邮箱时与普通来信毫无区别。
-            </p>
-            <label className="block text-[12px] text-slate-500">
-              发件人
-              <input
-                value={extFrom}
-                onChange={(e) => setExtFrom(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
-                placeholder="name@example.com"
-              />
-            </label>
-            <label className="block text-[12px] text-slate-500">
-              主题
-              <input
-                value={extSubject}
-                onChange={(e) => setExtSubject(e.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800"
-              />
-            </label>
-            <label className="block text-[12px] text-slate-500">
-              正文
-              <textarea
-                value={extBody}
-                onChange={(e) => setExtBody(e.target.value)}
-                rows={8}
-                className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-[13px] text-slate-800 font-mono"
-              />
-            </label>
-            {extErr && <div className="text-[12px] text-red-600">{extErr}</div>}
-            <button
-              type="button"
-              disabled={extBusy || !extFrom.trim() || !extSubject.trim()}
-              onClick={deliverExtMail}
-              className="w-full rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-[13px] py-2"
-            >
-              {extBusy ? "投递中…" : "投递到收件箱"}
-            </button>
-          </div>
+      {notice && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 card border-danger/30 shadow-pop px-4 py-2.5 text-[13px] text-danger rise-in"
+        >
+          {notice}
         </div>
       )}
 
-      {toast.length > 0 && <CaptureToast items={toast} targetId={targetId} onClose={() => setToast([])} />}
+      {extOpen && (
+        <ExternalMailDialog
+          onClose={() => setExtOpen(false)}
+          onDeliver={async (mail) => {
+            await api.act(targetId, "import_email", mail);
+            setSimState(await api.sim(targetId));
+          }}
+        />
+      )}
+
+      {toast.length > 0 && (
+        <CaptureToast
+          items={toast}
+          onObserve={() => {
+            setToast([]);
+            openObserve("timeline");
+          }}
+          onClose={() => setToast([])}
+        />
+      )}
     </div>
   );
 }

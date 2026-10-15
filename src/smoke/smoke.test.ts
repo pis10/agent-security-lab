@@ -3,9 +3,10 @@ import { readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
-import { getPiModels, resetPiModels } from "../core/pi-runtime.ts";
+import { getPiModels } from "../core/llm.ts";
+import { installTestLlm } from "../core/llm-testing.ts";
 import { SINKS } from "../core/sinks.ts";
-import { loadConfig, resetConfigCache } from "../lib/config.ts";
+import { resetConfigCache } from "../lib/config.ts";
 import type { TraceEvent } from "../lib/contracts.ts";
 import { SMOKE_CASES } from "./cases.ts";
 import { classify, errorCategory, executionFailures, type Sample, summarize } from "./results.ts";
@@ -54,8 +55,7 @@ test("分母包含未演示和错误，不把无通关证据当成防护成功�
 
 function fakeModel(tokensPerSecond = 1e9) {
   resetConfigCache();
-  resetPiModels();
-  loadConfig({ ASL_LLM_PROVIDER: "smoke-faux", ASL_LLM_MODEL: "test" });
+  installTestLlm({ kind: "builtin", provider: "smoke-faux", model: "test" });
   const faux = fauxProvider({ provider: "smoke-faux", models: [{ id: "test" }], tokensPerSecond });
   getPiModels().setProvider(faux.provider);
   return faux;

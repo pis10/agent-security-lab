@@ -1,7 +1,8 @@
 /**API 与 UI 共用的 wire 类型，以及断言 label 提取。 */
 
 export interface Meta {
-  llm_model: string;
+  /**当前模型 `provider/model`；null 表示管理员还没配置。 */
+  llm_model: string | null;
 }
 
 export interface DefenseInfo {
@@ -120,3 +121,70 @@ export const MIN_PASSWORD_LENGTH = 8;
 
 /**403 时附带的 code：须先修改初始密码。 */
 export const PASSWORD_CHANGE_REQUIRED = "password_change_required";
+
+/**503 时附带的 code：管理员还没在网页上配置模型。 */
+export const LLM_NOT_CONFIGURED = "llm_not_configured";
+
+/**内置厂商走 Pi 包内目录；另两种是自建服务的协议。 */
+export const LLM_KINDS = ["builtin", "openai-completions", "anthropic-messages"] as const;
+export type LlmKind = (typeof LLM_KINDS)[number];
+
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+/**自建 OpenAI 兼容服务的兼容开关，键名与取值即 Pi 的 compat 字段；不填为自动。 */
+export interface LlmCompat {
+  maxTokensField?: "max_completion_tokens" | "max_tokens";
+  supportsStore?: boolean;
+  supportsDeveloperRole?: boolean;
+  thinkingFormat?: "openai" | "deepseek" | "qwen" | "qwen-chat-template" | "chat-template";
+}
+
+/**模型设置表单。自建服务字段在内置厂商下忽略。 */
+export interface LlmSettingsInput {
+  kind: LlmKind;
+  /**内置厂商的 Pi provider id。 */
+  provider: string;
+  model: string;
+  base_url: string;
+  /**留空：服务未变时沿用已保存的 Key。 */
+  api_key?: string;
+  /**自建服务不需要 Key 时清除已保存的 Key。 */
+  clear_api_key?: boolean;
+  thinking: ThinkingLevel;
+  temperature: number;
+  context_window: number;
+  max_tokens: number;
+  compat: LlmCompat;
+  headers: Record<string, string>;
+}
+
+/**下发给设置页的已保存配置：Key 只给是否已设置与末四位。 */
+export interface LlmSettingsView extends Omit<LlmSettingsInput, "api_key" | "clear_api_key"> {
+  api_key_set: boolean;
+  api_key_hint: string | null;
+  updated_at: number;
+  updated_by: string | null;
+}
+
+export interface LlmProviderInfo {
+  id: string;
+  name: string;
+}
+
+export interface LlmModelInfo {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  context_window: number;
+}
+
+/**测试连接：发一次带工具的请求，看能否连通、是否会调用工具。 */
+export interface LlmTestResult {
+  ok: boolean;
+  latency_ms: number;
+  model: string;
+  tool_call: boolean;
+  reply: string | null;
+  error: { category: string; message: string } | null;
+}

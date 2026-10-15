@@ -1,35 +1,13 @@
-import { notFound } from "next/navigation";
-import { requirePageUser } from "@/lib/auth.ts";
-import { catalogData, learnerScenario } from "@/lib/page-data.ts";
+import { notFound, redirect } from "next/navigation";
 import { getScenario } from "@/scenarios/index.ts";
-import { findTarget, toTargetInfo } from "@/targets/registry.ts";
-import { Lesson } from "@/ui/Lesson";
-
-export const dynamic = "force-dynamic";
+import { rangeUrl } from "@/ui/catalog.ts";
 
 type Props = { params: Promise<{ scenarioId: string }> };
 
-export async function generateMetadata({ params }: Props) {
-  const { scenarioId } = await params;
-  const scenario = getScenario(scenarioId);
-  return { title: scenario ? `ASL · ${scenario.title}` : "ASL · 教学" };
-}
-
+/**课程内容已并入关卡工作台的任务卡。 */
 export default async function Page({ params }: Props) {
   const { scenarioId } = await params;
-  const user = await requirePageUser(`/learn/${scenarioId}`);
   const scenario = getScenario(scenarioId);
   if (!scenario) notFound();
-  const target = findTarget(scenario.target);
-  if (!target) notFound();
-  const { progress, meta, scenarios } = catalogData(user);
-  return (
-    <Lesson
-      scenario={learnerScenario(scenario, user)}
-      target={toTargetInfo(target)}
-      progress={progress}
-      meta={meta}
-      scenarioCount={scenarios.length}
-    />
-  );
+  redirect(rangeUrl(scenario.target, scenario.id));
 }
