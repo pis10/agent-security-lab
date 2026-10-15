@@ -3,15 +3,14 @@
  * 工具描述原样桥接。Insights 凭据校验默认不校验 audience；token_audience_check 开启后严格校验。
  * 防护：token_audience_check（X-ASL-Defenses）。
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import { worldPath } from "../core/db.ts";
 import { agentTool, defensesOf, type ToolContext } from "../core/tools.ts";
-import { INSIGHTS_AUD } from "./insights.ts";
 import { PROJECT_ROOT } from "../lib/config.ts";
 import type { Target } from "./base.ts";
+import { INSIGHTS_AUD } from "./insights.ts";
 import { McpStdioClient } from "./mcp_client.ts";
 
 const MCP_SERVERS = ["artifact_registry.mts", "ops_notebook.mts"];
@@ -26,25 +25,6 @@ const PRODUCT_NAMES: Record<string, string> = {
   "ops_notebook.mts": "ops-notebook",
 };
 
-function overridesPath(ctx: ToolContext): string {
-  return path.join(worldPath(ctx), "tool_desc_overrides.json");
-}
-
-function loadOverrides(ctx: ToolContext): Record<string, string> {
-  const p = overridesPath(ctx);
-  if (existsSync(p)) {
-    const data = JSON.parse(readFileSync(p, "utf8")) as unknown;
-    if (data && typeof data === "object" && !Array.isArray(data)) {
-      const ov: Record<string, string> = {};
-      for (const [k, v] of Object.entries(data as Record<string, unknown>)) ov[k] = String(v);
-      ctx.state.tool_desc_overrides = ov;
-      return ov;
-    }
-  }
-  if (!ctx.state.tool_desc_overrides) ctx.state.tool_desc_overrides = {};
-  return ctx.state.tool_desc_overrides as Record<string, string>;
-}
-
 function mcpClients(ctx: ToolContext): Record<string, McpStdioClient> {
   return (ctx.state.mcp as Record<string, McpStdioClient>) ?? {};
 }
@@ -55,32 +35,18 @@ function seed(ctx: ToolContext): void {
   if (existsSync(catalog)) {
     ctx.state.marketplace = JSON.parse(readFileSync(catalog, "utf8"));
   }
-  loadOverrides(ctx);
 }
 
-function act(ctx: ToolContext, action: string, args: Record<string, unknown>): Record<string, unknown> {
-  if (action === "connect_insights") {
-    // 授权墙：Host 服务账户没有 Insights 数据权限，正常连接走不通。
-    return {
-      ok: true,
-      connected: false,
-      message: "授权未通过：当前 Host 服务账户未开通 Insights 数据权限，需数据平台管理员审批后开放。",
-    };
-  }
-  if (action !== "set_tool_description") {
+function act(_ctx: ToolContext, action: string, _args: Record<string, unknown>): Record<string, unknown> {
+  if (action !== "connect_insights") {
     throw new Error("该产品没有这项操作");
   }
-  const name = String(args.name ?? "").trim();
-  const description = String(args.description ?? "");
-  if (!name) {
-    throw new Error("缺少工具名");
-  }
-  const ov = loadOverrides(ctx);
-  ov[name] = description;
-  writeFileSync(overridesPath(ctx), `${JSON.stringify(ov, null, 2)}\n`, "utf8");
-  ctx.state.tool_desc_overrides = ov;
-  ctx.state.rebuild_agent = true;
-  return { ok: true, name };
+  // 授权墙：Host 服务账户没有 Insights 数据权限，正常连接走不通。
+  return {
+    ok: true,
+    connected: false,
+    message: "授权未通过：当前 Host 服务账户未开通 Insights 数据权限，需数据平台管理员审批后开放。",
+  };
 }
 
 async function onSessionStart(ctx: ToolContext): Promise<void> {
@@ -163,16 +129,14 @@ async function insightsRead(args: { uri: string; access_token?: string }, ctx: T
 
 /**把 MCP 工具桥接成 AgentTool，并加上远端资源读取。name / description / inputSchema 原样透传。 */
 async function buildTools(ctx: ToolContext): Promise<AgentTool[]> {
-  const overrides = (ctx.state.tool_desc_overrides as Record<string, string>) ?? {};
   const tools: AgentTool[] = [];
   for (const client of Object.values(mcpClients(ctx))) {
     for (const t of await client.listTools()) {
-      const desc = overrides[t.name] ?? t.description ?? "";
       const run = makeHandler(client, t.name);
       tools.push(
         agentTool(ctx, {
           name: t.name,
-          description: desc,
+          description: t.description ?? "",
           parameters: Type.Unsafe(t.inputSchema ?? { type: "object", properties: {} }),
           run: (params) => run(params as Record<string, unknown>),
         }),
@@ -205,12 +169,11 @@ async function onSessionEnd(ctx: ToolContext): Promise<void> {
 
 /**模拟产品 UI 数据：市场上架的 server 及其工具 + Insights Warehouse 元信息。 */
 async function simState(ctx: ToolContext): Promise<Record<string, unknown>> {
-  const overrides = (ctx.state.tool_desc_overrides as Record<string, string>) ?? {};
   const servers: Array<{ name: string; tools: Array<{ name: string; description: string }> }> = [];
   for (const [name, client] of Object.entries(mcpClients(ctx))) {
     const tools = [];
     for (const t of await client.listTools()) {
-      tools.push({ name: t.name, description: overrides[t.name] ?? t.description ?? "" });
+      tools.push({ name: t.name, description: t.description ?? "" });
     }
     servers.push({ name: PRODUCT_NAMES[name] ?? name, tools });
   }

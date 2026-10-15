@@ -191,9 +191,6 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
   const [selectedName, setSelectedName] = useState<string | null>(null);
   // 仅前端的安装状态（目录里未装载的条目）
   const [extraInstalled, setExtraInstalled] = useState<ReadonlySet<string>>(new Set());
-  const [descDrafts, setDescDrafts] = useState<Record<string, string>>({});
-  const [descBusy, setDescBusy] = useState<string | null>(null);
-  const [descErr, setDescErr] = useState<string | null>(null);
   const [insightsMsg, setInsightsMsg] = useState<string | null>(null);
   const [insightsBusy, setInsightsBusy] = useState(false);
   const [insightsDetails, setInsightsDetails] = useState(false);
@@ -613,38 +610,9 @@ export default function McpMarket({ simState, messages, onSend, onAct, onResetCh
                         <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 font-mono text-[12px] font-semibold text-indigo-600">
                           {t.name}()
                         </div>
-                        {selected.live && onAct ? (
-                          <div className="px-3 py-2.5 space-y-2">
-                            <textarea
-                              value={descDrafts[t.name] ?? t.description ?? ""}
-                              onChange={(e) => setDescDrafts((d) => ({ ...d, [t.name]: e.target.value }))}
-                              rows={6}
-                              className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-[12px] leading-relaxed text-slate-700 font-mono"
-                            />
-                            {descErr && descBusy === null && <div className="text-[11px] text-red-600">{descErr}</div>}
-                            <button
-                              type="button"
-                              disabled={descBusy === t.name}
-                              onClick={() => {
-                                setDescBusy(t.name);
-                                setDescErr(null);
-                                onAct("set_tool_description", {
-                                  name: t.name,
-                                  description: descDrafts[t.name] ?? t.description ?? "",
-                                })
-                                  .catch((e) => setDescErr(e instanceof Error ? e.message : String(e)))
-                                  .finally(() => setDescBusy(null));
-                              }}
-                              className="rounded-md border border-slate-200 px-2.5 py-1 text-[12px] text-slate-700 hover:border-slate-300 disabled:opacity-50"
-                            >
-                              {descBusy === t.name ? "保存中…" : "保存说明"}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="px-3 py-2.5 text-[12px] leading-relaxed text-slate-600 whitespace-pre-wrap">
-                            {t.description || "发布者未提供说明"}
-                          </div>
-                        )}
+                        <div className="px-3 py-2.5 text-[12px] leading-relaxed text-slate-600 whitespace-pre-wrap">
+                          {t.description || "发布者未提供说明"}
+                        </div>
                       </div>
                     ))}
                     {selected.tools.length === 0 && <div className="text-xs text-slate-400">正在发现工具…</div>}

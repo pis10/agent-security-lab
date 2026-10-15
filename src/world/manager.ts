@@ -288,14 +288,7 @@ export class WorldManager {
 
   async act(targetId: string, action: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
     const world = await this.ensure(targetId);
-    return this._lock(async () => {
-      const result = await this._runAct(world, action, args);
-      if (ctxFlag(world.ctx, "rebuild_agent")) {
-        delete world.ctx.state.rebuild_agent;
-        await this._rebuildAgent(world);
-      }
-      return result;
-    });
+    return this._lock(() => this._runAct(world, action, args));
   }
 
   private async _runAct(world: World, action: string, args: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -382,12 +375,6 @@ export class WorldManager {
     return agent;
   }
 
-  private async _rebuildAgent(world: World): Promise<void> {
-    const messages = world.agent.state.messages;
-    world.agent = await this._makeAgent(world.target, world.ctx, world.tracer, messages);
-    this._syncChat(world);
-  }
-
   private _saveMeta(world: World): void {
     const payload = {
       target_id: world.targetId,
@@ -416,10 +403,6 @@ export class WorldManager {
       messages: [...world.messages],
     };
   }
-}
-
-function ctxFlag(ctx: ToolContext, key: string): boolean {
-  return ctx.state[key] === true;
 }
 
 /**进程内单例。 */

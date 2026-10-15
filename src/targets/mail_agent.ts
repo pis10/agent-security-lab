@@ -1,6 +1,6 @@
 /**邮件助手：间接提示注入 / 外发 / 长期记忆。
  *
- * read_email 返回外部邮件正文；read_secret 读保险库；send_email 打外发箱；
+ * read_email 返回外部邮件正文；send_email 打外发箱；
  * remember/recall 读写 memory.json（跨访问持久）。memory_write_gate 拦凭据形态写入。
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -77,7 +77,6 @@ function seed(ctx: ToolContext): void {
   const db = connect(dbPath);
   try {
     db.exec("CREATE TABLE emails (id INTEGER PRIMARY KEY, from_addr TEXT, subject TEXT, body TEXT, date TEXT)");
-    db.exec("CREATE TABLE vault (key TEXT PRIMARY KEY, value TEXT)");
     const emails = JSON.parse(readFileSync(path.join(SEED_DIR, "inbox.json"), "utf8")) as Array<{
       id: number;
       from: string;
@@ -87,9 +86,6 @@ function seed(ctx: ToolContext): void {
     }>;
     const emailStmt = db.prepare("INSERT INTO emails (id, from_addr, subject, body, date) VALUES (?, ?, ?, ?, ?)");
     for (const e of emails) emailStmt.run(e.id, e.from, e.subject, e.body, e.date ?? "");
-    const vault = JSON.parse(readFileSync(path.join(SEED_DIR, "vault.json"), "utf8")) as Record<string, string>;
-    const vaultStmt = db.prepare("INSERT INTO vault (key, value) VALUES (?, ?)");
-    for (const [k, v] of Object.entries(vault)) vaultStmt.run(k, v);
   } finally {
     db.close();
   }
@@ -125,21 +121,6 @@ async function readEmail(args: { id: string }, ctx: ToolContext): Promise<string
     return `[error] 找不到 id=${String(raw)} 的邮件`;
   }
   return JSON.stringify({ id: row.id, from: row.from_addr, subject: row.subject, body: row.body });
-}
-
-async function readSecret(args: { key: string }, ctx: ToolContext): Promise<string> {
-  const key = args.key;
-  const db = connect(dbPathOf(ctx));
-  let row: { value: string } | undefined;
-  try {
-    row = db.prepare("SELECT value FROM vault WHERE key = ?").get(key) as unknown as { value: string } | undefined;
-  } finally {
-    db.close();
-  }
-  if (row === undefined) {
-    return `[error] 保险库里没有 key=${key}`;
-  }
-  return row.value;
 }
 
 async function sendEmail(args: { to: string; subject: string; body: string }, ctx: ToolContext): Promise<string> {
@@ -192,12 +173,6 @@ export function buildTools(ctx: ToolContext): AgentTool[] {
       description: "按 id 读取一封邮件的完整内容。",
       parameters: Type.Object({ id: Type.String({ description: "邮件 id" }) }),
       run: readEmail,
-    }),
-    agentTool(ctx, {
-      name: "read_secret",
-      description: "从保险库读取指定 key 的敏感值（高权限操作）。",
-      parameters: Type.Object({ key: Type.String({ description: "要读取的键名" }) }),
-      run: readSecret,
     }),
     agentTool(ctx, {
       name: "send_email",
