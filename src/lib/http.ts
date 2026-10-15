@@ -1,7 +1,14 @@
 /**Route Handlers 共享助手：领域错误 → HTTP 状态映射 + zod 请求体解析。 */
 
 import type { z } from "zod";
-import { BadRequestError, NotFoundError } from "../core/errors.ts";
+import {
+  AuthError,
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../core/errors.ts";
 
 export const badRequest = (msg: string) => new BadRequestError(msg);
 
@@ -12,8 +19,17 @@ export async function handleRoute(fn: () => Promise<Response>): Promise<Response
     if (err instanceof NotFoundError) {
       return Response.json({ detail: err.message }, { status: 404 });
     }
-    if (err instanceof BadRequestError) {
+    if (err instanceof BadRequestError || err instanceof AuthError) {
       return Response.json({ detail: err.message }, { status: 400 });
+    }
+    if (err instanceof UnauthorizedError) {
+      return Response.json({ detail: err.message }, { status: 401 });
+    }
+    if (err instanceof ForbiddenError) {
+      return Response.json({ detail: err.message }, { status: 403 });
+    }
+    if (err instanceof ConflictError) {
+      return Response.json({ detail: err.message }, { status: 409 });
     }
     console.error("[route] unexpected error:", err);
     const msg = err instanceof Error ? err.message : String(err);
