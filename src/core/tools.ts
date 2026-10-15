@@ -5,7 +5,6 @@ import type { Config } from "../lib/config.ts";
 import type { Tracer } from "./trace.ts";
 
 export class ToolContext {
-  /**每次会话交给每个工具调用的状态。 */
   sessionId: string;
   tracer: Tracer;
   config: Config;

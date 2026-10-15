@@ -12,13 +12,13 @@ export interface Defense {
 export interface Target {
   id: string;
   name: string;
-  tierFocus: string; // 该靶标演练的攻击面
+  tierFocus: string;
   systemPrompt: string;
   buildTools: (ctx: ToolContext) => AgentTool[] | Promise<AgentTool[]>;
   seed?: (ctx: ToolContext) => void | Promise<void>;
   onSessionStart?: (ctx: ToolContext) => void | Promise<void>;
   onSessionEnd?: (ctx: ToolContext) => void | Promise<void>;
   defenses: Defense[];
-  simState: (ctx: ToolContext) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>; // 仿真产品 UI 数据
-  act?: (ctx: ToolContext, action: string, args: Record<string, unknown>) => Record<string, unknown>; // 玩家写操作
+  simState: (ctx: ToolContext) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
+  act?: (ctx: ToolContext, action: string, args: Record<string, unknown>) => Record<string, unknown>;
 }

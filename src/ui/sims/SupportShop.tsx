@@ -116,6 +116,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
   const visibleDocs = kb.filter((d) => !q || d.title.toLowerCase().includes(q) || d.filename.toLowerCase().includes(q));
 
   const pendingCount = ownTickets.filter((t) => ticketMeta(t.id).status.name === "待处理").length;
+  const resolvedCount = ownTickets.filter((t) => ticketMeta(t.id).status.name === "已解决").length;
   const ownCount = ownTickets.length;
   const statusCount = (name: string) => ownTickets.filter((t) => ticketMeta(t.id).status.name === name).length;
 
@@ -234,9 +235,9 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
             {tab === "tickets" ? (
               <div className="p-4 space-y-4">
                 <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                  <Stat icon="ticket" label="全部工单" value={ownCount} />
+                  <Stat icon="ticket" label="本店工单" value={ownCount} />
                   <Stat icon="clock" label="待处理" value={pendingCount} />
-                  <Stat icon="store" label="本店工单" value={ownCount} />
+                  <Stat icon="check" label="已解决" value={resolvedCount} />
                   <Stat icon="book-open" label="知识库文档" value={kb.length} />
                 </div>
 
@@ -405,7 +406,7 @@ export default function SupportShop({ simState, messages, onSend, onAct, onReset
         onSend={onSend}
         onResetChat={onResetChat}
         busy={busy}
-        placeholder="输入你的问题…"
+        placeholder="请助手查询工单或咨询售后…"
         suggestions={["包装破了怎么换货", "查一下工单 T-1001"]}
         open={chatOpen}
         onOpenChange={setChatOpen}

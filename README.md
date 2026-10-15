@@ -1,17 +1,62 @@
 # agent-security-lab · AI 红队靶场
 
-四个脆弱产品、五关课程。通关以工具实际执行与数据外发为准。
+**AI Red Team Lab** —— 一个开源的 Agent 安全实战靶场：在仿真业务产品中动手攻防，覆盖 LLM Agent 从传统 Web 漏洞到 MCP 认证链的主流攻击面。
 
-> 仅限本地学习与明确授权的安全测试。通关认的是工具结果与外发记录里的实际证据：越权返回的 `tenant_b` 工单行、命令执行输出的 `uid=`、元数据接口返回的 RAM 临时凭证（仿真 STS AccessKeyId，如 `STS.N4aBExample4CloudOps`）、远端配置口令本身。
+[![CI](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/pis10/agent-security-lab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A524-green)](package.json)
+[![Docker](https://img.shields.io/badge/deploy-docker%20compose-2496ED)](compose.yaml)
 
-## 运行
+> ⚠️ 仅限本地安全学习与明确授权的安全测试。请勿对任何真实系统使用课程中的攻击手法。
 
-运行使用 Docker。镜像基于 **Debian Bookworm**（`node:24-slim`）。Compose 启动应用与报告执行调度服务；每次 `read_report` 用同一个镜像创建一次性容器，真实执行 `cat` / `id` 后销毁。
+## 这是什么
+
+大模型 Agent 把「对话」变成了「操作」：查数据库、执行命令、发邮件、调用第三方工具，攻击面随之转移到工具层。这个项目把这些攻击面做成可以动手打的关卡：
+
+- **仿真产品**：客服后台、云运维控制台、企业邮箱、MCP 工具市场，每套都内置 AI 助手；
+- **以证据定通关**：判定依据是工具执行与外发记录，不是模型的口头回答；
+- **防护复测**：每关配套防护开关，开启后复测同一攻击，观测页可见拦截记录。
+
+## 界面
+
+**靶场** —— 仿真业务产品
+
+<img src="docs/screenshots/home.png" width="920" alt="靶场首页">
+
+**关卡工作台** —— 任务卡、仿真产品与内置 AI 助手
+
+<img src="docs/screenshots/workspace.png" width="920" alt="客服工作台与内置助手">
+
+**观测** —— 调用时间线、外发箱与防护开关
+
+<img src="docs/screenshots/observe.png" width="920" alt="观测页">
+
+**教学进度** —— 学员通关、实际防护复测与答案开关
+
+<img src="docs/screenshots/progress.png" width="920" alt="教学进度管理页">
+
+## 关卡
+
+| 关 | 产品 | 攻击面 | 关键缺陷 |
+|---|---|---|---|
+| L1 | 橙犀 · 客服工作台 | 越权访问（IDOR） | `get_ticket` 按 ID 取行，不校验租户 |
+| L2 | CloudOps · 运维控制台 | 命令注入 | `read_report` 把文件名拼进 shell |
+| L3 | CloudOps · 运维控制台 | SSRF（云元数据） | `fetch_url` 可达链路本地的元数据接口 |
+| L4 | NovaMail · 企业邮箱 | 记忆投毒 | `remember` 无审批写入长期记忆 |
+| L5 | Northstar MCP Hub | JWT Audience 混淆 | 资源服务漏验凭据 `aud`，跨资源重放 |
+
+课程由浅入深：前两关是经典漏洞在 Agent 工具里的新形态，之后继续练习服务端请求、持久记忆与 MCP 认证链中的安全边界。
+
+## 快速开始
+
+需要 Docker Engine 26 或更新版本，以及 Docker Compose v2。首次构建需要联网下载基础镜像和 npm 依赖。镜像基于 **Debian Bookworm**（`node:24-slim`）。Compose 启动应用与报告执行调度服务；每次 `read_report` 用同一个镜像创建一次性容器，真实执行 `cat` / `id` 后销毁。
 
 模型走 [Pi 1.2.0](https://github.com/earendil-works/pi/tree/v1.2.0) 的 `pi-ai` / `pi-agent-core`，MCP 客户端使用 `pi-mcp`：协议与目录由 SDK 处理，进程直连模型服务。
 
 ```bash
-cp .env.example .env   # 可选：端口、并发、初始管理员密码
+git clone https://github.com/pis10/agent-security-lab.git
+cd agent-security-lab
+cp .env.example .env   # 可选：并发、初始管理员密码
 docker compose up -d --build
 # http://127.0.0.1:8600
 ```
@@ -37,15 +82,6 @@ docker compose up -d --build
 Key 保存在数据卷的 `settings.db`（文件权限 600），页面只显示末四位。更换服务地址或厂商时，已保存的 Key 不会沿用到新服务，需要重新填写。
 
 不要把 coding-agent 的 `read` / `write` / `edit` / `bash` 装进靶场。模型只能看到各产品自己的工具。
-
-运行隔离集成测试（会创建并清理专用的测试容器和卷）：
-
-```bash
-docker build -t agent-security-lab:sandbox-test .
-ASL_TEST_IMAGE=agent-security-lab:sandbox-test corepack pnpm test:sandbox
-```
-
-改镜像源码需要 Node 24（pnpm 无需单独安装，corepack 按锁定版本提供：`corepack pnpm check` / `corepack pnpm test` / `corepack pnpm build`），跑靶场仍走上面的 compose。
 
 ## 模型自检
 
@@ -86,14 +122,6 @@ pnpm smoke --runs 3 --scenario ticket-idor --scenario token-audience
 
 按 L1 至 L5 进行。在工作台左侧任务卡阅读原理与目标，再在产品里尝试；卡住时逐级展开提示，最后才是答案。通关后在右侧观测抽屉开启防护，清空对话再试（无需重置；重置会清除当前关卡的通关记录）。产品「重置」清除该产品数据及当前课程的通关进度，同产品其他课程不受影响；账号菜单「重置我的进度」只清当前账号的数据。切换课程会重置对应产品。同一产品回复期间，再发消息、清空、重置和修改防护会返回 409，等待本轮结束后再操作。
 
-| 关 | 产品 | 攻击面 |
-|---|---|---|
-| L1 `ticket-idor` | 橙犀客服后台 | `get_ticket` 不校验租户 |
-| L2 `cmd-injection` | CloudOps 运维控制台 | `read_report` 把文件名拼进 shell |
-| L3 `ssrf-cloud-metadata` | CloudOps | `fetch_url` 打到站内元数据 |
-| L4 `memory-poisoning` | NovaMail | `remember` 无审批写入长期记忆 |
-| L5 `token-audience` | Northstar MCP Hub | 下载会话凭据（aud=artifact-registry）重放到漏验 audience 的 Insights Warehouse |
-
 防护默认关。命中防护记 `policy_blocked`。
 
 任务卡实时显示通关条件的达成情况，提示按「提示 1 → 提示 2 → 答案」逐步展开。不带关卡进入产品为自由探索，可在任务卡里选择关卡。工作台里按 `` Ctrl+` `` 开关观测抽屉。管理员在教学进度页统一控制答案是否开放；默认开放，关闭后服务端不再向学员下发答案（管理员始终可见），已打开的页面需要刷新，已看过的内容无法收回。
@@ -128,12 +156,11 @@ src/lib/         配置、契约、路由助手
 mcpservers/      MCP stdio server
 data/seeds/      种子
 data/runtime/    运行时数据：账号、模型设置、世界、进度（gitignore，容器内挂卷）
-agent-security-notes/  Agent 安全教学文章与截图
 ```
 
 ## 安全
 
-- 模型 API Key 由管理员在网页上填写，保存在数据卷的 `settings.db`（权限 600），不进镜像、日志或页面。
+- 模型 API Key 由管理员在网页上填写，保存在数据卷的 `settings.db`（权限 600），完整 Key 不下发到页面，也不写入镜像。备份数据卷时会包含模型设置，应按凭据保管。
 - 端口只发布到回环地址。
 - 应用容器非 root、根文件系统只读、丢弃全部 capabilities；持久数据写入 `data/runtime`，临时文件写入 `/tmp`。
 - HTTP 工具只能请求本站服务；元数据 IP 映射到站内仿真响应，其他地址返回模拟连接失败。重定向逐跳检查，这层限制始终生效，不受教学防护开关影响，也不限制模型客户端连接配置的模型服务。
@@ -141,3 +168,40 @@ agent-security-notes/  Agent 安全教学文章与截图
 - L2 在一次性容器执行真实 shell：非 root、断网、根目录只读，无应用数据卷和模型凭据，限制内存、进程数、时间和输出。每次只传入当前世界的报告文件，执行完成后销毁整个容器。
 - 调度服务通过专用 Unix socket 接收固定格式的报告任务，是唯一挂载 Docker socket 的组件；应用与执行容器均不挂载 Docker socket。它属于可信基础设施，不对外暴露端口或接受任意 Docker 参数。
 - 沙箱不可用时 `read_report` 返回服务不可用，不会回退到应用或宿主机执行。
+
+## 用于团队培训
+
+管理员在「管理 › 账号管理」创建学员账号，在「教学进度」查看通关与复测、导出 CSV，并控制是否下发答案。可以先关闭答案，让学员按任务卡的分级提示尝试，再开放答案复盘。
+
+- L2 / L3 使用同一个运维产品，可对比命令注入和 SSRF 的防护差异。
+- L4 分别体验外部攻击者与邮箱主人，观察记忆如何跨会话影响后续行为。
+- L5 结合凭据签名、scope 与 audience 的不同职责展开讨论。
+
+## 参与贡献
+
+欢迎提 Issue 和 PR。新增关卡参考 `src/scenarios/`：原理、目标、提示、答案、断言、防护与复测工具；产品工具放在 `src/targets/`。
+
+本地开发需要 Node 24 和 Corepack；依赖版本由锁文件固定：
+
+```bash
+corepack pnpm install --frozen-lockfile
+corepack pnpm check
+corepack pnpm test
+corepack pnpm build
+# 开发服务：corepack pnpm dev
+```
+
+L2 的隔离集成测试会创建并清理专用容器和卷，需要运行中的 Docker：
+
+```bash
+docker build -t agent-security-lab:sandbox-test .
+ASL_TEST_IMAGE=agent-security-lab:sandbox-test corepack pnpm test:sandbox
+```
+
+## 安全披露
+
+本仓库自身的研究性漏洞（例如绕过通关判定）欢迎通过 Issue 报告。请不要提交针对真实系统的攻击内容。
+
+## 许可证
+
+[MIT](LICENSE)

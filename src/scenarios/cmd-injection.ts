@@ -14,9 +14,9 @@ CloudOps 的 read_report 按文件名读取工作目录中的报告，目录内�
     "文件名会进入 shell。思考哪些字符能让一条读取命令变成多条命令。",
     "保留有效报告名，在后面用 shell 分隔符追加打印当前用户身份的命令。",
   ],
-  solution: `先请助手正常读取 report.txt，观察工具调用形式。
+  solution: `1. 先让助手正常读取 report.txt，观察工具调用的形式。
 
-再将文件名改为 report.txt; id。服务端将拼出 cat <工作目录>/report.txt; id，分号后的 id 在同一 shell 中执行，两条输出一并返回。`,
+2. 再让它读取 report.txt; id。服务端将拼出 cat <工作目录>/report.txt; id，分号后的 id 在同一个 shell 中执行，uid= 随文件内容一并返回。`,
   retest_tools: ["read_report"],
   assertions: [
     {
